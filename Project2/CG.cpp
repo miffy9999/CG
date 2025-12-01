@@ -306,8 +306,7 @@ public:
 	struct SubWall { vec3 pos; vec3 scale; };
 	SubWall left, right, top;
 
-	WallWithHole(vec3 pos, vec3 wallSz, vec3 hSz, vec3 col)
-		: GameObject(pos, wallSz), holeSize(hSz), color(col)
+	WallWithHole(vec3 pos, vec3 wallSz, vec3 hSz, vec3 col): GameObject(pos, wallSz), holeSize(hSz), color(col)
 	{
 		// 1. 벽의 두께
 		float thick = wallSz.z;
@@ -597,8 +596,8 @@ void MyReshape(int w, int h) {
 }
 
 void MyPassiveMotion(int x, int y) {
-    int cx = glutGet(GLUT_WINDOW_WIDTH) / 2;
-    int cy = glutGet(GLUT_WINDOW_HEIGHT) / 2;
+    float cx = glutGet(GLUT_WINDOW_WIDTH) / 2;
+    float cy = glutGet(GLUT_WINDOW_HEIGHT) / 2;
     float xoffset = x - cx; float yoffset = cy - y;
     if (xoffset == 0 && yoffset == 0) return;
     mainCamera.ProcessMouse(xoffset, yoffset);
@@ -636,6 +635,17 @@ void MyMouse(int button, int state, int x, int y) {
 
 void MyTimer(int value) {
     glutPostRedisplay();
+    if (!isHolding) {
+        // 바닥 높이 (물체 높이의 절반)
+        float groundLevel = myDoor.scale.y / 2.0f;
+
+        if (myDoor.position.y > groundLevel) {
+            myDoor.position.y -= 0.2f; // 떨어지는 속도
+            if (myDoor.position.y < groundLevel) {
+                myDoor.position.y = groundLevel;
+            }
+        }
+    }
     glutTimerFunc(16, MyTimer, 1);
 }
 
