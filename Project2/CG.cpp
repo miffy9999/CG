@@ -13,22 +13,22 @@
 using namespace std;
 using namespace glm;
 
-// [»ç¿ëÀÚ ¼³Á¤: ÅØ½ºÃ³ ÆÄÀÏ °æ·Î]
-const char* textureFilePath = "/Data/wood.bmp";
+// [ì‚¬ìš©ì ì„¤ì •: í…ìŠ¤ì²˜ íŒŒì¼ ê²½ë¡œ]
+const char* textureFilePath = "Data/wood.bmp";
 
-// [À©µµ¿ì ¼³Á¤]
+// [ìœˆë„ìš° ì„¤ì •]
 int windowWidth = 800;
 int windowHeight = 600;
 
-bool isLevelClear = false;      // Å¬¸®¾î ¿©ºÎ
+bool isLevelClear = false;      // í´ë¦¬ì–´ ì—¬ë¶€
 
-// [Ãæµ¹ ¹Ú½º ±¸Á¶Ã¼]
+// [ì¶©ëŒ ë°•ìŠ¤ êµ¬ì¡°ì²´]
 struct AABB {
     vec3 min;
     vec3 max;
 };
 
-// [¸ğµç ¹°Ã¼ÀÇ ºÎ¸ğ Å¬·¡½º]
+// [ëª¨ë“  ë¬¼ì²´ì˜ ë¶€ëª¨ í´ë˜ìŠ¤]
 class GameObject {
 public:
     vec3 position;
@@ -39,33 +39,50 @@ public:
     virtual ~GameObject() {}
 };
 
-// -------------------------------------------------------
-// [Ãß°¡µÊ] ÇÃ·¹ÀÌ¾î º® Ãæµ¹ Ã¼Å© ÇÔ¼ö
-// -------------------------------------------------------
+// í”Œë ˆì´ì–´ ë²½ ì¶©ëŒ ì²´í¬ í•¨ìˆ˜
+
 vec3 CheckPlayerCollision(vec3 currentPos, vec3 nextPos) {
-    // 1. ¸Ê ¹ÛÀ¸·Î ³ª°¡´Â °Í ¹æÁö
+    // 1. ì „ì²´ ë§µì˜ ì™¸ê³½ ê²½ê³„ (Room 1 + Room 2)
+    // Zì¶•: Room 1 ë’¤ìª½(19.5) ~ Room 2 ëìª½(-59.5)
+    if (nextPos.z > 19.5f) nextPos.z = 19.5f;
+    if (nextPos.z < -59.5f) nextPos.z = -59.5f;
+
+    // Xì¶•: ì¢Œìš° í­ (-19.5 ~ 19.5)
     if (nextPos.x > 19.5f) nextPos.x = 19.5f;
     if (nextPos.x < -19.5f) nextPos.x = -19.5f;
-    if (nextPos.z > 19.5f) nextPos.z = 19.5f;
-    if (nextPos.y < 2.0f) nextPos.y = 2.0f; // ¹Ù´Ú
 
-    // 2. ¾Õº® (Z = -20) Ãæµ¹ Ã³¸®
-    // ÇÃ·¹ÀÌ¾î°¡ º® ÂÊÀ¸·Î °¡·Á°í ÇÒ ¶§(Z°¡ -19.5º¸´Ù ÀÛ¾ÆÁú ¶§)
-    if (nextPos.z < -19.5f) {
-        if (!isLevelClear) {
-            // Å¬¸®¾î Àü: Àı´ë Åë°ú ºÒ°¡
-            nextPos.z = -19.5f;
+    // ë°”ë‹¥ ë†’ì´
+    if (nextPos.y < 2.0f) nextPos.y = 2.0f;
+
+    // 2. ì¤‘ê°„ ë²½ (Z = -20) ì¶©ëŒ ì²˜ë¦¬
+    // ë²½ì€ -20 ìœ„ì¹˜ì— ìˆê³  ë‘ê»˜ê°€ ìˆìœ¼ë¯€ë¡œ, -19.5 ~ -20.5 êµ¬ê°„ì´ 'ë²½ ë‚´ë¶€'ì…ë‹ˆë‹¤.
+    bool insideWallZone = (nextPos.z < -19.5f && nextPos.z > -20.5f);
+
+    if (insideWallZone) {
+        // [í†µê³¼ ì¡°ê±´] ë ˆë²¨ì´ í´ë¦¬ì–´ë˜ì—ˆê³  && êµ¬ë© ìœ„ì¹˜(X ì¤‘ì•™)ì—¬ì•¼ í•¨
+        bool isAtHole = (abs(nextPos.x) < 1.3f);
+
+        if (isLevelClear && isAtHole) {
+            // í†µê³¼ í—ˆìš© (ì•„ë¬´ê²ƒë„ ì•ˆ í•¨, nextPos ìœ ì§€)
         }
         else {
-            // Å¬¸®¾î ÈÄ: ±¸¸Û À§Ä¡(X: -1.5 ~ 1.5)°¡ ¾Æ´Ï¸é ¸·Èû
-            if (abs(nextPos.x) > 1.5f) {
+            // [ì¶©ëŒ ë°œìƒ!] 
+            // ì¤‘ìš”: í”Œë ˆì´ì–´ê°€ 'ì–´ë””ì„œ' ì™”ëŠ”ì§€ì— ë”°ë¼ ë°€ì–´ë‚´ëŠ” ë°©í–¥ì„ ë‹¤ë¥´ê²Œ í•¨
+
+            if (currentPos.z > -20.0f) {
+                // ë°© 1(ì•ìª½)ì— ìˆì—ˆìœ¼ë©´ -> ë°© 1 ìª½ìœ¼ë¡œ ë°€ì–´ëƒ„
                 nextPos.z = -19.5f;
             }
-            // ±¸¸Û À§Ä¡¸é Åë°ú (nextPos À¯Áö)
+            else {
+                // ë°© 2(ë’¤ìª½)ì— ìˆì—ˆìœ¼ë©´ -> ë°© 2 ìª½ìœ¼ë¡œ ë°€ì–´ëƒ„
+                nextPos.z = -20.5f;
+            }
         }
     }
+
     return nextPos;
 }
+
 
 class Camera {
 public:
@@ -94,14 +111,14 @@ public:
         if (length(frontMove) > 0) frontMove = normalize(frontMove);
 
         float velocity = MovementSpeed;
-        vec3 nextPos = Pos; // ÀÌµ¿ ¿¹Á¤ À§Ä¡ °è»ê
+        vec3 nextPos = Pos; // ì´ë™ ì˜ˆì • ìœ„ì¹˜ ê³„ì‚°
 
         if (direction == 0) nextPos += frontMove * velocity; // W
         if (direction == 1) nextPos -= frontMove * velocity; // S
         if (direction == 2) nextPos -= Right * velocity;     // A
         if (direction == 3) nextPos += Right * velocity;     // D
 
-        // [¼öÁ¤µÊ] ¿©±â¼­ Ãæµ¹ °Ë»ç¸¦ ¼öÇàÇÏ°í ¾ÈÀüÇÑ À§Ä¡¸¸ Àû¿ë
+        // [ìˆ˜ì •ë¨] ì—¬ê¸°ì„œ ì¶©ëŒ ê²€ì‚¬ë¥¼ ìˆ˜í–‰í•˜ê³  ì•ˆì „í•œ ìœ„ì¹˜ë§Œ ì ìš©
         Pos = CheckPlayerCollision(Pos, nextPos);
     }
 
@@ -132,7 +149,7 @@ private:
 };
 
 // -------------------------------------------------------
-// [1] BMP ·Î´õ
+// [1] BMP ë¡œë”
 // -------------------------------------------------------
 unsigned char* LoadBMP(const char* filename, int* width, int* height) {
     FILE* file = fopen(filename, "rb");
@@ -153,14 +170,14 @@ unsigned char* LoadBMP(const char* filename, int* width, int* height) {
 }
 
 // -------------------------------------------------------
-// [0] Å¬·¡½º Á¤ÀÇ
+// [0] í´ë˜ìŠ¤ ì •ì˜
 // -------------------------------------------------------
 
 class Door : public GameObject {
 public:
-    GLuint texID; // publicÀ¸·Î ÅëÀÏ
+    GLuint texID; // publicìœ¼ë¡œ í†µì¼
 
-    // ÃÊ±âÈ­ ½Ã 0À¸·Î ¼³Á¤
+    // ì´ˆê¸°í™” ì‹œ 0ìœ¼ë¡œ ì„¤ì •
     Door(vec3 pos, vec3 sz) : GameObject(pos, sz), texID(0) {}
 
     void LoadTexture(const char* filename) {
@@ -168,7 +185,7 @@ public:
         unsigned char* data = LoadBMP(filename, &width, &height);
 
         if (data) {
-            glGenTextures(1, &texID); // ¸â¹ö º¯¼ö texID¿¡ ÀúÀå
+            glGenTextures(1, &texID); // ë©¤ë²„ ë³€ìˆ˜ texIDì— ì €ì¥
             glBindTexture(GL_TEXTURE_2D, texID);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -177,10 +194,10 @@ public:
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
             glGenerateMipmap(GL_TEXTURE_2D);
             delete[] data;
-            cout << "Door ÅØ½ºÃ³ ·Îµå ¼º°ø!" << endl;
+            cout << "Door í…ìŠ¤ì²˜ ë¡œë“œ ì„±ê³µ!" << endl;
         }
         else {
-            cout << "ÅØ½ºÃ³ ·Îµå ½ÇÆĞ!" << endl;
+            cout << "í…ìŠ¤ì²˜ ë¡œë“œ ì‹¤íŒ¨!" << endl;
         }
     }
 
@@ -191,7 +208,7 @@ public:
         glRotatef(rotation.y, 0.0f, 1.0f, 0.0f);
         glScalef(scale.x, scale.y, scale.z);
 
-        // ÅØ½ºÃ³ ÀÔÈ÷±â (¾Õ¸é)
+        // í…ìŠ¤ì²˜ ì…íˆê¸° (ì•ë©´)
         glEnable(GL_TEXTURE_2D);
         glBindTexture(GL_TEXTURE_2D, texID);
         glColor3f(1.0f, 1.0f, 1.0f);
@@ -204,28 +221,28 @@ public:
         glTexCoord2f(0.0f, 1.0f); glVertex3f(-0.5f, 0.5f, 0.5f);
         glEnd();
 
-        // ³ª¸ÓÁö ¸é (´Ü»ö)
+        // ë‚˜ë¨¸ì§€ ë©´ (ë‹¨ìƒ‰)
         glDisable(GL_TEXTURE_2D);
         glColor3f(0.4f, 0.2f, 0.0f);
 
         glBegin(GL_QUADS);
-        // µÚ
+        // ë’¤
         glNormal3f(0.0f, 0.0f, -1.0f);
         glVertex3f(-0.5f, -0.5f, -0.5f); glVertex3f(-0.5f, 0.5f, -0.5f);
         glVertex3f(0.5f, 0.5f, -0.5f); glVertex3f(0.5f, -0.5f, -0.5f);
-        // À§
+        // ìœ„
         glNormal3f(0.0f, 1.0f, 0.0f);
         glVertex3f(-0.5f, 0.5f, -0.5f); glVertex3f(-0.5f, 0.5f, 0.5f);
         glVertex3f(0.5f, 0.5f, 0.5f); glVertex3f(0.5f, 0.5f, -0.5f);
-        // ¾Æ·¡
+        // ì•„ë˜
         glNormal3f(0.0f, -1.0f, 0.0f);
         glVertex3f(-0.5f, -0.5f, -0.5f); glVertex3f(0.5f, -0.5f, -0.5f);
         glVertex3f(0.5f, -0.5f, 0.5f); glVertex3f(-0.5f, -0.5f, 0.5f);
-        // ¿ì
+        // ìš°
         glNormal3f(1.0f, 0.0f, 0.0f);
         glVertex3f(0.5f, -0.5f, -0.5f); glVertex3f(0.5f, 0.5f, -0.5f);
         glVertex3f(0.5f, 0.5f, 0.5f); glVertex3f(0.5f, -0.5f, 0.5f);
-        // ÁÂ
+        // ì¢Œ
         glNormal3f(-1.0f, 0.0f, 0.0f);
         glVertex3f(-0.5f, -0.5f, -0.5f); glVertex3f(-0.5f, -0.5f, 0.5f);
         glVertex3f(-0.5f, 0.5f, 0.5f); glVertex3f(-0.5f, 0.5f, -0.5f);
@@ -238,54 +255,54 @@ public:
 
 class Cube : public GameObject {
 public:
-	vec3 color; // Å¥ºê »ö»ó Ãß°¡
+	vec3 color; // íë¸Œ ìƒ‰ìƒ ì¶”ê°€
 
-	// »ı¼ºÀÚ: À§Ä¡, Å©±â, »ö»óÀ» ¹ŞÀ½
+	// ìƒì„±ì: ìœ„ì¹˜, í¬ê¸°, ìƒ‰ìƒì„ ë°›ìŒ
 	Cube(vec3 pos, vec3 sz, vec3 col) : GameObject(pos, sz), color(col) {}
 
 	void Draw() {
 		glPushMatrix();
 
-		// 1. À§Ä¡ ÀÌµ¿ (GameObjectÀÇ position »ç¿ë)
-		// AABB °è»êÀÌ "Áß½É ±âÁØ"ÀÌ¹Ç·Î, ¿©±â¼­µµ Áß½ÉÀ¸·Î ÀÌµ¿ÇØ¾ß ÇÔ
+		// 1. ìœ„ì¹˜ ì´ë™ (GameObjectì˜ position ì‚¬ìš©)
+		// AABB ê³„ì‚°ì´ "ì¤‘ì‹¬ ê¸°ì¤€"ì´ë¯€ë¡œ, ì—¬ê¸°ì„œë„ ì¤‘ì‹¬ìœ¼ë¡œ ì´ë™í•´ì•¼ í•¨
 		glTranslatef(position.x, position.y, position.z);
 
-		// 2. Å©±â °è»ê (GameObjectÀÇ scale »ç¿ë)
-		// ÀÎÀÚ·Î w, h, d¸¦ ¹Ş´Â °Ô ¾Æ´Ï¶ó ³» ¸öÀÇ Å©±â(scale)¸¦ ½á¾ß ÇÔ
+		// 2. í¬ê¸° ê³„ì‚° (GameObjectì˜ scale ì‚¬ìš©)
+		// ì¸ìë¡œ w, h, dë¥¼ ë°›ëŠ” ê²Œ ì•„ë‹ˆë¼ ë‚´ ëª¸ì˜ í¬ê¸°(scale)ë¥¼ ì¨ì•¼ í•¨
 		float x = scale.x / 2.0f;
 		float y = scale.y / 2.0f;
 		float z = scale.z / 2.0f;
 
 		glColor3f(color.r, color.g, color.b);
 
-		// 3. ±×¸®±â (Áß½É¿¡¼­ +/- x, y, z ¸¸Å­ »¸¾î³ª°¨)
+		// 3. ê·¸ë¦¬ê¸° (ì¤‘ì‹¬ì—ì„œ +/- x, y, z ë§Œí¼ ë»—ì–´ë‚˜ê°)
 		glBegin(GL_QUADS);
-		// ¾Õ¸é (ZÃà ¾çÀÇ ¹æÇâ)
+		// ì•ë©´ (Zì¶• ì–‘ì˜ ë°©í–¥)
 		glNormal3f(0, 0, 1);
 		glVertex3f(-x, -y, z); glVertex3f(x, -y, z);
 		glVertex3f(x, y, z); glVertex3f(-x, y, z);
 
-		// µŞ¸é (ZÃà À½ÀÇ ¹æÇâ)
+		// ë’·ë©´ (Zì¶• ìŒì˜ ë°©í–¥)
 		glNormal3f(0, 0, -1);
 		glVertex3f(-x, -y, -z); glVertex3f(-x, y, -z);
 		glVertex3f(x, y, -z); glVertex3f(x, -y, -z);
 
-		// ¿ŞÂÊ (XÃà À½ÀÇ ¹æÇâ)
+		// ì™¼ìª½ (Xì¶• ìŒì˜ ë°©í–¥)
 		glNormal3f(-1, 0, 0);
 		glVertex3f(-x, -y, -z); glVertex3f(-x, -y, z);
 		glVertex3f(-x, y, z); glVertex3f(-x, y, -z);
 
-		// ¿À¸¥ÂÊ (XÃà ¾çÀÇ ¹æÇâ)
+		// ì˜¤ë¥¸ìª½ (Xì¶• ì–‘ì˜ ë°©í–¥)
 		glNormal3f(1, 0, 0);
 		glVertex3f(x, -y, -z); glVertex3f(x, y, -z);
 		glVertex3f(x, y, z); glVertex3f(x, -y, z);
 
-		// À­¸é (YÃà ¾çÀÇ ¹æÇâ)
+		// ìœ—ë©´ (Yì¶• ì–‘ì˜ ë°©í–¥)
 		glNormal3f(0, 1, 0);
 		glVertex3f(-x, y, -z); glVertex3f(-x, y, z);
 		glVertex3f(x, y, z); glVertex3f(x, y, -z);
 
-		// ¾Æ·§¸é (YÃà À½ÀÇ ¹æÇâ)
+		// ì•„ë«ë©´ (Yì¶• ìŒì˜ ë°©í–¥)
 		glNormal3f(0, -1, 0);
 		glVertex3f(-x, -y, -z); glVertex3f(x, -y, -z);
 		glVertex3f(x, -y, z); glVertex3f(-x, -y, z);
@@ -295,36 +312,36 @@ public:
 	}
 };
 
-// [±¸¸Û ¶Õ¸° º® Å¬·¡½º]
+// [êµ¬ë© ëš«ë¦° ë²½ í´ë˜ìŠ¤]
 class WallWithHole : public GameObject {
 public:
 	vec3 color;
-	vec3 holeSize; // ±¸¸ÛÀÇ Å©±â (Æø, ³ôÀÌ)
-	vec3 holePos;  // ±¸¸ÛÀÇ À§Ä¡ (º® Áß½É ±âÁØ ¿ÀÇÁ¼Â)
+	vec3 holeSize; // êµ¬ë©ì˜ í¬ê¸° (í­, ë†’ì´)
+	vec3 holePos;  // êµ¬ë©ì˜ ìœ„ì¹˜ (ë²½ ì¤‘ì‹¬ ê¸°ì¤€ ì˜¤í”„ì…‹)
 
-	// ³»ºÎÀûÀ¸·Î »ç¿ëÇÒ 3°³ÀÇ Å¥ºê Á¤º¸¸¦ ¸Å¹ø °è»êÇÏÁö ¾Ê°í ÀúÀåÇØµÎ±â À§ÇÑ ±¸Á¶Ã¼
+	// ë‚´ë¶€ì ìœ¼ë¡œ ì‚¬ìš©í•  3ê°œì˜ íë¸Œ ì •ë³´ë¥¼ ë§¤ë²ˆ ê³„ì‚°í•˜ì§€ ì•Šê³  ì €ì¥í•´ë‘ê¸° ìœ„í•œ êµ¬ì¡°ì²´
 	struct SubWall { vec3 pos; vec3 scale; };
 	SubWall left, right, top;
 
 	WallWithHole(vec3 pos, vec3 wallSz, vec3 hSz, vec3 col): GameObject(pos, wallSz), holeSize(hSz), color(col)
 	{
-		// 1. º®ÀÇ µÎ²²
+		// 1. ë²½ì˜ ë‘ê»˜
 		float thick = wallSz.z;
 
-		// 2. ÀüÃ¼ º®ÀÇ Àı¹İ Å©±â
+		// 2. ì „ì²´ ë²½ì˜ ì ˆë°˜ í¬ê¸°
 		float halfW = wallSz.x / 2.0f;
 		float halfH = wallSz.y / 2.0f;
 		float holeHalfW = holeSize.x / 2.0f;
 
 		// ---------------------------------------------------
-		// [ÀÚµ¿ °è»ê] 3°³ÀÇ µ¢¾î¸®·Î ÂÉ°³±â
+		// [ìë™ ê³„ì‚°] 3ê°œì˜ ë©ì–´ë¦¬ë¡œ ìª¼ê°œê¸°
 		// ---------------------------------------------------
 
 		float pillarW = (wallSz.x - holeSize.x) / 2.0f;
 		left.scale = vec3(pillarW, wallSz.y, thick);
-		left.pos = vec3(-halfW + (pillarW / 2.0f), 0.0f, 0.0f); // ·ÎÄÃ ÁÂÇ¥
+		left.pos = vec3(-halfW + (pillarW / 2.0f), 0.0f, 0.0f); // ë¡œì»¬ ì¢Œí‘œ
 
-		// (2) ¿À¸¥ÂÊ ±âµÕ (¿ŞÂÊ°ú ´ëÄª)
+		// (2) ì˜¤ë¥¸ìª½ ê¸°ë‘¥ (ì™¼ìª½ê³¼ ëŒ€ì¹­)
 		right.scale = vec3(pillarW, wallSz.y, thick);
 		right.pos = vec3(halfW - (pillarW / 2.0f), 0.0f, 0.0f);
 
@@ -335,73 +352,262 @@ public:
 		top.pos = vec3(0.0f, headerY, 0.0f);
 	}
 
-	// ³»ºÎ Å¥ºê ±×¸®±â ÇïÆÛ
+	// ë‚´ë¶€ íë¸Œ ê·¸ë¦¬ê¸° í—¬í¼
 	void DrawSubCube(SubWall sw) {
 		glPushMatrix();
-		glTranslatef(sw.pos.x, sw.pos.y, sw.pos.z); // ·ÎÄÃ ÀÌµ¿
+		glTranslatef(sw.pos.x, sw.pos.y, sw.pos.z); // ë¡œì»¬ ì´ë™
 		glScalef(sw.scale.x, sw.scale.y, sw.scale.z);
 
 		float x = 0.5f, y = 0.5f, z = 0.5f;
 		glBegin(GL_QUADS);
-		glNormal3f(0, 0, 1); glVertex3f(-x, -y, z); glVertex3f(x, -y, z); glVertex3f(x, y, z); glVertex3f(-x, y, z); // ¾Õ
-		glNormal3f(0, 0, -1); glVertex3f(-x, -y, -z); glVertex3f(-x, y, -z); glVertex3f(x, y, -z); glVertex3f(x, -y, -z); // µÚ
-		glNormal3f(-1, 0, 0); glVertex3f(-x, -y, -z); glVertex3f(-x, -y, z); glVertex3f(-x, y, z); glVertex3f(-x, y, -z); // ÁÂ
-		glNormal3f(1, 0, 0); glVertex3f(x, -y, -z); glVertex3f(x, y, -z); glVertex3f(x, y, z); glVertex3f(x, -y, z); // ¿ì
-		glNormal3f(0, 1, 0); glVertex3f(-x, y, -z); glVertex3f(-x, y, z); glVertex3f(x, y, z); glVertex3f(x, y, -z); // À§
-		glNormal3f(0, -1, 0); glVertex3f(-x, -y, -z); glVertex3f(x, -y, -z); glVertex3f(x, -y, z); glVertex3f(-x, -y, z); // ¾Æ·¡
+		glNormal3f(0, 0, 1); glVertex3f(-x, -y, z); glVertex3f(x, -y, z); glVertex3f(x, y, z); glVertex3f(-x, y, z); // ì•
+		glNormal3f(0, 0, -1); glVertex3f(-x, -y, -z); glVertex3f(-x, y, -z); glVertex3f(x, y, -z); glVertex3f(x, -y, -z); // ë’¤
+		glNormal3f(-1, 0, 0); glVertex3f(-x, -y, -z); glVertex3f(-x, -y, z); glVertex3f(-x, y, z); glVertex3f(-x, y, -z); // ì¢Œ
+		glNormal3f(1, 0, 0); glVertex3f(x, -y, -z); glVertex3f(x, y, -z); glVertex3f(x, y, z); glVertex3f(x, -y, z); // ìš°
+		glNormal3f(0, 1, 0); glVertex3f(-x, y, -z); glVertex3f(-x, y, z); glVertex3f(x, y, z); glVertex3f(x, y, -z); // ìœ„
+		glNormal3f(0, -1, 0); glVertex3f(-x, -y, -z); glVertex3f(x, -y, -z); glVertex3f(x, -y, z); glVertex3f(-x, -y, z); // ì•„ë˜
 		glEnd();
 		glPopMatrix();
 	}
 
 	void Draw() {
 		glPushMatrix();
-		// 1. º® ÀüÃ¼ÀÇ À§Ä¡·Î ÀÌµ¿
+		// 1. ë²½ ì „ì²´ì˜ ìœ„ì¹˜ë¡œ ì´ë™
 		glTranslatef(position.x, position.y, position.z);
 
 		glColor3f(color.r, color.g, color.b);
 
-		// 2. ÂÉ°³Áø 3Á¶°¢ ±×¸®±â
+		// 2. ìª¼ê°œì§„ 3ì¡°ê° ê·¸ë¦¬ê¸°
 		DrawSubCube(left);
 		DrawSubCube(right);
 		DrawSubCube(top);
 
 		glPopMatrix();
 	}
-	// [Áß¿ä] Ãæµ¹ Ã³¸®¸¦ À§ÇØ AABB¸¦ ¹İÈ¯ÇÒ ¶§ ÁÖÀÇ!
-	// ±×³É GetAABB()¸¦ ¾²¸é ±¸¸Û±îÁö Æ÷ÇÔµÈ Å« ¹Ú½º°¡ µÇ¾î¹ö·Á ¹®À» ¸ø Áö³ª°¨.
+	// [ì¤‘ìš”] ì¶©ëŒ ì²˜ë¦¬ë¥¼ ìœ„í•´ AABBë¥¼ ë°˜í™˜í•  ë•Œ ì£¼ì˜!
+	// ê·¸ëƒ¥ GetAABB()ë¥¼ ì“°ë©´ êµ¬ë©ê¹Œì§€ í¬í•¨ëœ í° ë°•ìŠ¤ê°€ ë˜ì–´ë²„ë ¤ ë¬¸ì„ ëª» ì§€ë‚˜ê°.
+};
+
+class AnamorphicPuzzle {
+public:
+    struct Piece {
+        vec3 pos;
+        vec3 scale;
+        vec3 rot;
+    };
+    vector<Piece> pieces;
+
+    vec3 projectorPos; // ì •ë‹µì„ ë³¼ ìˆ˜ ìˆëŠ” ìœ„ì¹˜ (í”Œë ˆì´ì–´ê°€ ì„œì•¼ í•  ê³³)
+    vec3 lookAtTarget; // ì‹œì„ ì´ í–¥í•˜ëŠ” ê³³ (êµ¬ì¡°ë¬¼ ì¤‘ì‹¬)
+    GLuint texID;
+
+    // ìƒì„±ì: íë¸Œë“¤ì„ ëœë¤í•˜ê²Œ ë°°ì¹˜
+    AnamorphicPuzzle() {
+        // [ìˆ˜ì •ë¨] ì •ë‹µ ìœ„ì¹˜ (í”„ë¡œì í„°)
+        // ê¸°ì¡´ Z: -25.0f -> -32.0f (íƒ€ê²Ÿì— ë” ê°€ê¹Œì›Œì§)
+        // ê¸°ì¡´ X: 15.0f -> 12.0f (ê°ë„ë¥¼ ì•½ê°„ ì™„ë§Œí•˜ê²Œ)
+        projectorPos = vec3(12.0f, 4.0f, -32.0f);
+
+        // íƒ€ê²Ÿ ìœ„ì¹˜ (ë°© 2ì˜ ì•ˆìª½ ì¤‘ì•™)
+        lookAtTarget = vec3(0.0f, 5.0f, -50.0f);
+
+        texID = 0;
+    }
+
+    // ì´ˆê¸°í™”: íë¸Œ ëœë¤ ìƒì„± ë° í…ìŠ¤ì²˜ ë¡œë“œ
+    // ìµœì í™” ë²„ì „: 50ê°œ + ì ë‹¹í•œ í¬ê¸°
+// [ìˆ˜ì •ë¨] ë„“ê²Œ í¼ëœ¨ë¦¬ê³ , ì‘ê²Œ ë§Œë“¤ì–´ì„œ 'íŒŒí¸ ì•„íŠ¸' ëŠë‚Œ ë‚´ê¸°
+    // [ìˆ˜ì •ë¨] ì‚¬ìš©ì ì„¤ì • ë³€ìˆ˜(Tuning Variables) ì¶”ê°€
+    void Init(const char* texturePath) {
+        // --------------------------------------------------------
+        // [ì—¬ê¸°ë¥¼ ì¡°ì ˆí•˜ì„¸ìš”!] í¼ì§ ì •ë„ì™€ í¬ê¸° ì¡°ì ˆ ë³€ìˆ˜
+        // --------------------------------------------------------
+        float spreadX = 13.0f;   // ì¢Œìš°ë¡œ ì–¼ë§ˆë‚˜ í¼ì§ˆì§€ (í´ìˆ˜ë¡ ë„“ê²Œ í¼ì§)
+        float spreadY = 9.0f;   // ìœ„ì•„ë˜ë¡œ ì–¼ë§ˆë‚˜ í¼ì§ˆì§€
+        float spreadZ = 13.0f;  // ì•ë’¤ ê¹Šì´ê° (í´ìˆ˜ë¡ ì˜†ì—ì„œ ë´¤ì„ ë•Œ ë” ê¹¨ì ¸ ë³´ì„)
+
+        float centerY = 5.0f;   // íë¸Œë“¤ì´ ëª¨ì¼ ì¤‘ì‹¬ ë†’ì´
+        float centerZ = -45.0f; // íë¸Œë“¤ì´ ëª¨ì¼ ì¤‘ì‹¬ ê¹Šì´ (ë°© ì•ˆìª½)
+
+        float minSize = 1.0f;   // íë¸Œ ìµœì†Œ í¬ê¸°
+        float maxSize = 2.0f;   // íë¸Œ ìµœëŒ€ í¬ê¸° (ìµœì†Œì™€ ì°¨ì´ê°€ ì»¤ì•¼ ë‹¤ì–‘í•´ ë³´ì„)
+        // --------------------------------------------------------
+
+        // í…ìŠ¤ì²˜ ë¡œë“œ (ê¸°ì¡´ê³¼ ë™ì¼)
+        int w, h;
+        unsigned char* data = LoadBMP(texturePath, &w, &h);
+        if (data) {
+            glGenTextures(1, &texID);
+            glBindTexture(GL_TEXTURE_2D, texID);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            delete[] data;
+        }
+
+        pieces.clear();
+
+        // 60ê°œ ìƒì„±
+        for (int i = 0; i < 100; i++) {
+            Piece p;
+
+            // ë‚œìˆ˜ ìƒì„± (0.0 ~ 1.0)
+            float r1 = (rand() % 1000) / 1000.0f;
+            float r2 = (rand() % 1000) / 1000.0f;
+            float r3 = (rand() % 1000) / 1000.0f;
+            float r4 = (rand() % 1000) / 1000.0f;
+
+            // [ìœ„ì¹˜] ì„¤ì •í•œ spread ë³€ìˆ˜ë¥¼ ê³±í•´ì„œ ë²”ìœ„ ì¡°ì ˆ
+            // ì˜ˆ: spreadXê°€ 10ì´ë©´, -5 ~ +5 ë²”ìœ„ì— ë°°ì¹˜
+            float rx = (r1 * spreadX) - (spreadX / 2.0f);
+            float ry = (r2 * spreadY) - (spreadY / 2.0f) + centerY;
+            float rz = (r3 * spreadZ) - (spreadZ / 2.0f) + centerZ;
+
+            p.pos = vec3(rx, ry, rz);
+
+            // [í¬ê¸°] minSize ~ maxSize ì‚¬ì´ì—ì„œ ëœë¤ ê²°ì •
+            float scale = minSize + (r4 * (maxSize - minSize));
+            p.scale = vec3(scale, scale, scale);
+
+            // íšŒì „
+            p.rot = vec3(rand() % 360, rand() % 360, rand() % 360);
+
+            pieces.push_back(p);
+        }
+    }
+
+    // [í•µì‹¬] ì›”ë“œ ì¢Œí‘œ(v)ë¥¼ ì •ë‹µ ì‹œì ì˜ UV ì¢Œí‘œë¡œ ë³€í™˜í•˜ëŠ” í•¨ìˆ˜
+    vec2 GetProjectedUV(vec3 worldPos) {
+        // 1. View Matrix (ì •ë‹µ ìœ„ì¹˜ì—ì„œ íƒ€ê²Ÿì„ ë°”ë¼ë³´ëŠ” í–‰ë ¬)
+        mat4 view = lookAt(projectorPos, lookAtTarget, vec3(0, 1, 0));
+
+        // 2. Projection Matrix (ì¹´ë©”ë¼ì™€ ë™ì¼í•œ 45ë„ í™”ê°)
+        mat4 proj = perspective(radians(45.0f), (float)800 / 600, 0.1f, 100.0f);
+
+        // 3. World -> Clip Space ë³€í™˜
+        vec4 clipSpace = proj * view * vec4(worldPos, 1.0f);
+
+        // 4. Perspective Divide (NDC ë³€í™˜)
+        vec3 ndc = vec3(clipSpace) / clipSpace.w;
+
+        // 5. NDC(-1~1) -> UV(0~1) ë³€í™˜
+        return vec2(ndc.x * 0.5f + 0.5f, ndc.y * 0.5f + 0.5f);
+    }
+
+    void Draw() {
+        if (texID == 0) return;
+
+        // [í•µì‹¬ ë³€ê²½] ì¡°ëª… ë„ê¸° (Unlit)
+        // ì¡°ëª…ì„ ë„ë©´ ê·¸ë¦¼ìê°€ ì‚¬ë¼ì ¸ì„œ ì™„ë²½í•œ í‰ë©´ ì´ë¯¸ì§€ì²˜ëŸ¼ ë³´ì„
+        glDisable(GL_LIGHTING);
+
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, texID);
+
+        // í…ìŠ¤ì²˜ ìƒ‰ìƒì„ ê·¸ëŒ€ë¡œ ì¶œë ¥ (í™˜ê²½ê´‘ ë¬´ì‹œ)
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
+        for (const auto& p : pieces) {
+            glPushMatrix();
+            glTranslatef(p.pos.x, p.pos.y, p.pos.z);
+            glRotatef(p.rot.x, 1, 0, 0);
+            glRotatef(p.rot.y, 0, 1, 0);
+            glRotatef(p.rot.z, 0, 0, 1);
+
+            float s = p.scale.x / 2.0f;
+            vec3 v[8] = {
+                {-s,-s, s}, { s,-s, s}, { s, s, s}, {-s, s, s},
+                {-s,-s,-s}, { s,-s,-s}, { s, s,-s}, {-s, s,-s}
+            };
+
+            mat4 model = mat4(1.0f);
+            model = translate(model, p.pos);
+            model = rotate(model, radians(p.rot.x), vec3(1, 0, 0));
+            model = rotate(model, radians(p.rot.y), vec3(0, 1, 0));
+            model = rotate(model, radians(p.rot.z), vec3(0, 0, 1));
+
+            int faces[6][4] = {
+                {0, 1, 2, 3}, {5, 4, 7, 6}, {4, 0, 3, 7},
+                {1, 5, 6, 2}, {3, 2, 6, 7}, {4, 5, 1, 0}
+            };
+
+            // ë²•ì„ (Normal)ì€ ì¡°ëª… ê³„ì‚°ìš©ì´ë¼ ì¡°ëª…ì„ ë„ë©´ í•„ìš” ì—†ì§€ë§Œ, 
+            // í˜¹ì‹œ ëª¨ë¥´ë‹ˆ ë‚¨ê²¨ë‘¡ë‹ˆë‹¤.
+            vec3 normals[6] = {
+                {0,0,1}, {0,0,-1}, {-1,0,0}, {1,0,0}, {0,1,0}, {0,-1,0}
+            };
+
+            glBegin(GL_QUADS);
+            for (int i = 0; i < 6; i++) {
+                // glNormal3fv(value_ptr(normals[i])); // ì¡°ëª… ê»ìœ¼ë‹ˆ ì£¼ì„ ì²˜ë¦¬í•´ë„ ë¨
+
+                for (int j = 0; j < 4; j++) {
+                    vec3 localPos = v[faces[i][j]];
+                    vec4 worldPos4 = model * vec4(localPos, 1.0f);
+                    vec3 worldPos = vec3(worldPos4);
+
+                    vec2 uv = GetProjectedUV(worldPos);
+
+                    glTexCoord2f(uv.x, uv.y);
+                    glVertex3f(localPos.x, localPos.y, localPos.z);
+                }
+            }
+            glEnd();
+
+            glPopMatrix();
+        }
+
+        // ë’·ì •ë¦¬: ë‹¤ë¥¸ ë¬¼ì²´ë“¤ì„ ìœ„í•´ ì„¤ì •ì„ ì›ìƒë³µêµ¬
+        glDisable(GL_TEXTURE_2D);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); // ê¸°ë³¸ ëª¨ë“œë¡œ ë³µêµ¬
+        glEnable(GL_LIGHTING); // ì¡°ëª… ë‹¤ì‹œ ì¼œê¸°
+    }
+
+    // í”Œë ˆì´ì–´ê°€ ì •ë‹µ ìœ„ì¹˜ì— ìˆëŠ”ì§€ ê²€ì‚¬
+    bool CheckSolved(vec3 playerPos) {
+        float dist = distance(playerPos, projectorPos);
+        // ì •ë‹µ ìœ„ì¹˜ ë°˜ê²½ 2.0 ì•ˆì— ë“¤ì–´ì˜¤ë©´ ì„±ê³µ
+        return (dist < 2.0f);
+    }
 };
 
 
 // -------------------------------------------------------
-// [0-1] Àü¿ªº¯¼ö ¼±¾ğ
+// [0-1] ì „ì—­ë³€ìˆ˜ ì„ ì–¸
 // -------------------------------------------------------
-Door myDoor(vec3(0.0f, 2.0f, -5.0f), vec3(2.6f, 4.0f, 0.0f));          // ¿ì¸®°¡ Á¶ÀÛÇÒ ¹°Ã¼
-Cube roomFloor(vec3(0.0f, -0.5f, 0.0f), vec3(40.0f, 1.0f, 40.0f), vec3(0.7f, 0.7f, 0.7f)); // ¹Ù´Ú
+Door myDoor(vec3(0.0f, 2.0f, -5.0f), vec3(2.6f, 4.0f, 0.0f));          // ìš°ë¦¬ê°€ ì¡°ì‘í•  ë¬¼ì²´
+Cube roomFloor(vec3(0.0f, -0.5f, 0.0f), vec3(40.0f, 1.0f, 40.0f), vec3(0.7f, 0.7f, 0.7f)); // ë°”ë‹¥
 Camera mainCamera(vec3(0.0f, 4.0f, 10.0f));
-
-// º® °øÅë »ö»ó
+AnamorphicPuzzle myPuzzle;
+bool isPuzzleClear = false; // 2ë²ˆë°© í¼ì¦ í’€ì—ˆëŠ”ì§€ ì—¬ë¶€
 vec3 wallColor(0.8f, 0.7f, 0.6f);
-float wallThick = 2.0f; // º® µÎ²²
+float wallThick = 2.0f; // ë²½ ë‘ê»˜
 
-WallWithHole frontWall( // ¾ÕÂÊ º®
-	vec3(0.0f, 7.5f, -20.0f - (wallThick / 2)), // À§Ä¡
-	vec3(40.0f, 15.0f, wallThick),              // º® ÀüÃ¼ Å©±â
-	vec3(2.6f, 4.0f, 0.0f),                     // ±¸¸Û Å©±â (¹® Å©±â)
+WallWithHole frontWall( // ì•ìª½ ë²½
+	vec3(0.0f, 7.5f, -20.0f - (wallThick / 2)), // ìœ„ì¹˜
+	vec3(40.0f, 15.0f, wallThick),              // ë²½ ì „ì²´ í¬ê¸°
+	vec3(2.6f, 4.0f, 0.0f),                     // êµ¬ë© í¬ê¸° (ë¬¸ í¬ê¸°)
 	wallColor
 );
-Cube wallBehind(vec3(0.0f, 7.5f, 20.0f + (wallThick / 2)), vec3(40.0f, 15.0f, wallThick), wallColor); // [2] µÚÂÊ º® (Z = 20)
-Cube wallRight(vec3(20.0f + (wallThick / 2), 7.5f, 0.0f), vec3(wallThick, 15.0f, 40.0f), wallColor); // [3] ¿À¸¥ÂÊ º® (X = 20)
-Cube wallLeft(vec3(-20.0f - (wallThick / 2), 7.5f, 0.0f), vec3(wallThick, 15.0f, 40.0f), wallColor); // [4] ¿ŞÂÊ º® (X = -20)
+Cube wallBehind(vec3(0.0f, 7.5f, 20.0f + (wallThick / 2)), vec3(40.0f, 15.0f, wallThick), wallColor); // [2] ë’¤ìª½ ë²½ (Z = 20)
+Cube wallRight(vec3(20.0f + (wallThick / 2), 7.5f, 0.0f), vec3(wallThick, 15.0f, 40.0f), wallColor); // [3] ì˜¤ë¥¸ìª½ ë²½ (X = 20)
+Cube wallLeft(vec3(-20.0f - (wallThick / 2), 7.5f, 0.0f), vec3(wallThick, 15.0f, 40.0f), wallColor); // [4] ì™¼ìª½ ë²½ (X = -20)
+// [ê¸°ì¡´ ë³€ìˆ˜ë“¤ ì•„ë˜ì— ì¶”ê°€] Room 2 (ë‘ ë²ˆì§¸ ë°©) êµ¬ì¡°ë¬¼ ì •ì˜
+Cube room2Floor(vec3(0.0f, -0.5f, -40.0f), vec3(40.0f, 1.0f, 40.0f), vec3(0.6f, 0.6f, 0.6f)); // ë°©2 ë°”ë‹¥ (ì•½ê°„ ì–´ë‘ìš´ ìƒ‰)
+Cube room2Back(vec3(0.0f, 7.5f, -60.0f - (wallThick / 2)), vec3(40.0f, 15.0f, wallThick), wallColor); // ë°©2 ë’·ë²½
+Cube room2Right(vec3(20.0f + (wallThick / 2), 7.5f, -40.0f), vec3(wallThick, 15.0f, 40.0f), wallColor); // ë°©2 ì˜¤ë¥¸ìª½ ë²½
+Cube room2Left(vec3(-20.0f - (wallThick / 2), 7.5f, -40.0f), vec3(wallThick, 15.0f, 40.0f), wallColor); // ë°©2 ì™¼ìª½ ë²½
 
 
-bool isHolding = false;     // Àâ°í ÀÖ´ÂÁö ¿©ºÎ
-float grabDistance = 0.0f;    // Àâ¾ÒÀ» ¶§ÀÇ °Å¸®
-vec3 grabOriginalScale; // Àâ¾ÒÀ» ¶§ÀÇ ¿ø·¡ Å©±â
+bool isHolding = false;     // ì¡ê³  ìˆëŠ”ì§€ ì—¬ë¶€
+float grabDistance = 0.0f;    // ì¡ì•˜ì„ ë•Œì˜ ê±°ë¦¬
+vec3 grabOriginalScale; // ì¡ì•˜ì„ ë•Œì˜ ì›ë˜ í¬ê¸°
 
 
 
 // -------------------------------------------------------
-// [2] ·ÎÁ÷ ÇÔ¼ö
+// [2] ë¡œì§ í•¨ìˆ˜
 // -------------------------------------------------------
 void SetupLighting() {
     glEnable(GL_LIGHTING);
@@ -433,7 +639,7 @@ float GetWallDistance() {
 
     planes.push_back({ vec3(0.0f, 0.0f, 0.0f), vec3(0.0f, 1.0f, 0.0f) });
     planes.push_back({ vec3(0.0f, 15.0f, 0.0f), vec3(0.0f, -1.0f, 0.0f) });
-    planes.push_back({ vec3(0.0f, 0.0f, -20.0f), vec3(0.0f, 0.0f, 1.0f) }); // ¾Õº®
+    planes.push_back({ vec3(0.0f, 0.0f, -20.0f), vec3(0.0f, 0.0f, 1.0f) }); // ì•ë²½
     planes.push_back({ vec3(0.0f, 0.0f, 20.0f), vec3(0.0f, 0.0f, -1.0f) });
     planes.push_back({ vec3(-20.0f, 0.0f, 0.0f), vec3(1.0f, 0.0f, 0.0f) });
     planes.push_back({ vec3(20.0f, 0.0f, 0.0f), vec3(-1.0f, 0.0f, 0.0f) });
@@ -451,7 +657,7 @@ float GetWallDistance() {
 }
 
 // -------------------------------------------------------
-// [3] ±×¸®±â ÇÔ¼öµé
+// [3] ê·¸ë¦¬ê¸° í•¨ìˆ˜ë“¤
 // -------------------------------------------------------
 void DrawCube(float w, float h, float d) {
     float x = w / 2.0f;
@@ -490,27 +696,38 @@ void DrawCube(float w, float h, float d) {
 //}
 
 
-// [¹æ ±×¸®±â]
+// [ë°© ê·¸ë¦¬ê¸°]
 void DrawRoom() {
-	// 1. ¹Ù´Ú ±×¸®±â (±âÁ¸°ú µ¿ÀÏ)
+	// 1. ë°”ë‹¥ ê·¸ë¦¬ê¸° (ê¸°ì¡´ê³¼ ë™ì¼)
 	roomFloor.Draw();
-	// 2. º® ±×¸®±â
-	// [º® 1: ±¸¸Û ¶Õ¸° º® (Z = -20)] 
+	// 2. ë²½ ê·¸ë¦¬ê¸°
+	// [ë²½ 1: êµ¬ë© ëš«ë¦° ë²½ (Z = -20)] 
 	glNormal3f(0, 0, 1);
 	frontWall.Draw();
 
-	// [º® 2: µÚÂÊ (Z = 20)]
-	// ³ë¸Ö ¹æÇâ ¹İ´ë (¹æ ¾ÈÂÊÀ» ÇâÇÏ°Ô)
+	// [ë²½ 2: ë’¤ìª½ (Z = 20)]
+	// ë…¸ë©€ ë°©í–¥ ë°˜ëŒ€ (ë°© ì•ˆìª½ì„ í–¥í•˜ê²Œ)
 	glNormal3f(0, 0, -1);
 	wallBehind.Draw();
 
-	// [º® 3: ¿À¸¥ÂÊ (X = 20)]
+	// [ë²½ 3: ì˜¤ë¥¸ìª½ (X = 20)]
 	glNormal3f(-1, 0, 0);
 	wallRight.Draw();
 
-	// [º® 4: ¿ŞÂÊ (X = -20)]
+	// [ë²½ 4: ì™¼ìª½ (X = -20)]
 	glNormal3f(1, 0, 0);
 	wallLeft.Draw();
+
+    room2Floor.Draw();      // ë°©2 ë°”ë‹¥
+    glNormal3f(0, 0, 1); 
+    room2Back.Draw();  // ë°©2 ë’·ë²½
+
+    glNormal3f(-1, 0, 0);
+    room2Right.Draw(); // ë°©2 ì˜¤ë¥¸ìª½ ë²½
+
+    glNormal3f(1, 0, 0); 
+    room2Left.Draw();  // ë°©2 ì™¼ìª½ ë²½
+
 
 	glEnd();
 }
@@ -537,7 +754,7 @@ void DrawCrosshair() {
     glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix();
 }
 
-// [Á¤´ä È®ÀÎ ÇÔ¼ö]
+// [ì •ë‹µ í™•ì¸ í•¨ìˆ˜]
 void CheckAnswer() {
     Door* door = &myDoor;
     vec3 goalPos = vec3(0.0f, 2.0f, -20.0f);
@@ -548,12 +765,12 @@ void CheckAnswer() {
     float sy = abs(door->scale.y - goalScale.y);
 
     if (d < 4.0f && sx < 1.5f && sy < 1.5f) {
-        cout << "Å»Ãâ ¼º°ø!" << endl;
+        cout << "íƒˆì¶œ ì„±ê³µ!" << endl;
         isLevelClear = true;
 
         door->position = goalPos;
         door->scale = goalScale;
-        door->rotation.y = 85.0f; // ¹® ¿­¸²
+        door->rotation.y = 85.0f; // ë¬¸ ì—´ë¦¼
         door->position.x -= 1.2f;
         door->position.z -= 1.0f;
     }
@@ -569,15 +786,24 @@ void MyDisplay() {
         mainCamera.Up.x, mainCamera.Up.y, mainCamera.Up.z);
 
     DrawRoom();
+    myPuzzle.Draw();
 
+    // [ì¶”ê°€] ì •ë‹µ ìœ„ì¹˜ íŒíŠ¸ (ì–´ë”” ì„œì•¼í• ì§€ ëª¨ë¥´ë‹ˆ ë¹¨ê°„ ê³µ í•˜ë‚˜ ë„ì›Œì¤Œ)
+    if (!isPuzzleClear) {
+        glPushMatrix();
+        glTranslatef(myPuzzle.projectorPos.x, myPuzzle.projectorPos.y, myPuzzle.projectorPos.z);
+        glColor3f(1.0f, 0.0f, 0.0f); // ë¹¨ê°„ìƒ‰
+        glutWireSphere(0.3f, 10, 10); // ì—¬ê¸°ê°€ ì •ë‹µ ìœ„ì¹˜ë‹¤! í‘œì‹œ
+        glPopMatrix();
+    }
     glPushMatrix();
     glTranslatef(-5.0f, 0.0f, -5.0f); glRotatef(45.0f, 0.0f, 1.0f, 0.0f);
     //DrawDesk();
     glPopMatrix();
 
     if (isHolding) {
-        float currentDist = GetWallDistance(); // ÇÃ·¹ÀÌ¾î ½Ã¼±ÀÌ ´ê´Â º®±îÁöÀÇ °Å¸® °è»ê
-        float scaleRatio = currentDist / grabDistance; // ¿ø·¡ °Å¸® ´ëºñ ÇöÀç °Å¸® ºñÀ²
+        float currentDist = GetWallDistance(); // í”Œë ˆì´ì–´ ì‹œì„ ì´ ë‹¿ëŠ” ë²½ê¹Œì§€ì˜ ê±°ë¦¬ ê³„ì‚°
+        float scaleRatio = currentDist / grabDistance; // ì›ë˜ ê±°ë¦¬ ëŒ€ë¹„ í˜„ì¬ ê±°ë¦¬ ë¹„ìœ¨
         myDoor.position = mainCamera.Pos + (mainCamera.Front * currentDist);
         myDoor.scale = grabOriginalScale * scaleRatio;
         myDoor.rotation = vec3(0, 0, 0);
@@ -634,13 +860,18 @@ void MyMouse(int button, int state, int x, int y) {
 }
 
 void MyTimer(int value) {
+    //2ë²ˆë°©í¼ì¦
+    if (!isPuzzleClear && myPuzzle.CheckSolved(mainCamera.Pos)) {
+        cout << "ê·¸ë¦¼ ì™„ì„±! í¼ì¦ í•´ê²°!" << endl;
+        isPuzzleClear = true;
+    }
     glutPostRedisplay();
     if (!isHolding) {
-        // ¹Ù´Ú ³ôÀÌ (¹°Ã¼ ³ôÀÌÀÇ Àı¹İ)
+        // ë°”ë‹¥ ë†’ì´ (ë¬¼ì²´ ë†’ì´ì˜ ì ˆë°˜)
         float groundLevel = myDoor.scale.y / 2.0f;
 
         if (myDoor.position.y > groundLevel) {
-            myDoor.position.y -= 0.2f; // ¶³¾îÁö´Â ¼Óµµ
+            myDoor.position.y -= 0.2f; // ë–¨ì–´ì§€ëŠ” ì†ë„
             if (myDoor.position.y < groundLevel) {
                 myDoor.position.y = groundLevel;
             }
@@ -658,6 +889,7 @@ int main(int argc, char** argv) {
     glewInit();
     glEnable(GL_DEPTH_TEST);
     SetupLighting();
+    myPuzzle.Init(textureFilePath);
     myDoor.LoadTexture(textureFilePath);
 
     glutSetCursor(GLUT_CURSOR_NONE);
