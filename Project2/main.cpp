@@ -8,9 +8,14 @@
 #include <vector>
 #include <iostream>
 #include <algorithm> 
+#include <fstream> // [Room 2 추가] 파일 입출력
 
 using namespace std;
 using namespace glm;
+
+// [Room 2 추가] 텍스처 경로 및 퍼즐 변수
+const char* textureFilePath = "Data/wood.bmp";
+bool isPuzzleClear = false;
 
 // [윈도우 설정]
 int windowWidth = 1000;
@@ -19,7 +24,28 @@ int windowHeight = 800;
 bool isLevelClear = false;
 
 // -------------------------------------------------------
-// [기본 오브젝트 클래스]
+// [Room 2 추가] BMP 로더 함수 (기존 코드 영향 없음)
+// -------------------------------------------------------
+unsigned char* LoadBMP(const char* filename, int* width, int* height) {
+    FILE* file = fopen(filename, "rb");
+    if (!file) return NULL;
+    unsigned char header[54];
+    if (fread(header, 1, 54, file) != 54) { fclose(file); return NULL; }
+    *width = *(int*)&(header[0x12]);
+    *height = *(int*)&(header[0x16]);
+    int imageSize = *(int*)&(header[0x22]);
+    if (imageSize == 0) imageSize = (*width) * (*height) * 3;
+    unsigned char* data = new unsigned char[imageSize];
+    fread(data, 1, imageSize, file);
+    fclose(file);
+    for (int i = 0; i < imageSize - 2; i += 3) {
+        unsigned char temp = data[i]; data[i] = data[i + 2]; data[i + 2] = temp;
+    }
+    return data;
+}
+
+// -------------------------------------------------------
+// [기본 오브젝트 클래스] (기존 유지)
 // -------------------------------------------------------
 class GameObject {
 public:
@@ -70,7 +96,7 @@ public:
 };
 
 // -------------------------------------------------------
-// [큐브]
+// [큐브] (기존 유지)
 // -------------------------------------------------------
 class Cube : public GameObject {
 public:
@@ -90,7 +116,7 @@ public:
 };
 
 // -------------------------------------------------------
-// [구체]
+// [구체] (기존 유지)
 // -------------------------------------------------------
 class Sphere : public GameObject {
 public:
@@ -109,7 +135,7 @@ public:
 };
 
 // -------------------------------------------------------
-// [구멍 뚫린 벽] - 수정됨 (뒷판 유격 제거)
+// [구멍 뚫린 벽] (기존 유지)
 // -------------------------------------------------------
 class WallWithHole : public GameObject {
 public:
@@ -134,14 +160,8 @@ public:
         parts[1] = { vec3(0, -(hh + topH) / 2.0f, 0), vec3(w, topH, thick) }; // 하
         parts[2] = { vec3(-(hw + sideW) / 2.0f, 0, 0), vec3(sideW, hh, thick) }; // 좌
         parts[3] = { vec3((hw + sideW) / 2.0f, 0, 0), vec3(sideW, hh, thick) }; // 우
-
-        // [수정 핵심] 뒷판 위치 조정 (유격 제거)
-        // 벽의 두께(thick)는 2.0. 벽의 뒷면은 로컬 Z = -1.0.
-        // 뒷판의 두께는 1.0. 뒷판의 중심을 -1.5로 두어야 앞면이 -1.0이 되어 딱 붙음.
-        // 즉, -thick * 0.75f 위치에 두면 됨.
         parts[4] = { vec3(0, 0, -thick * 0.75f), vec3(hw, hh, thick / 2.0f) };
 
-        // OpenGL 좌표계 회전 방향 반전 (-rotY)
         float rad = radians(-rotY);
         float cosR = cos(rad);
         float sinR = sin(rad);
@@ -169,7 +189,7 @@ public:
 };
 
 // -------------------------------------------------------
-// [버튼]
+// [버튼] (기존 유지)
 // -------------------------------------------------------
 class Button {
 public:
@@ -180,11 +200,8 @@ public:
     Button(vec3 pos, GameObject* target) : position(pos), targetObj(target), isPressed(false) {}
 
     void Update() {
-        // XZ 평면 거리 체크
         float dist = distance(vec3(position.x, 0, position.z), vec3(targetObj->position.x, 0, targetObj->position.z));
-        // 물체가 버튼보다 위에 있는지 체크
         bool onTop = (targetObj->position.y - (targetObj->scale.y / 2.0f)) < (position.y + 0.5f);
-        // 물체 크기가 너무 작거나 크지 않은지 체크 (적당한 크기만 인정)
         bool sizeMatch = (targetObj->scale.x > 1.0f && targetObj->scale.x < 3.8f);
 
         if (dist < 1.5f && onTop && sizeMatch) isPressed = true;
@@ -206,6 +223,120 @@ public:
         glutSolidCube(1.0f);
         float noEm[] = { 0, 0, 0, 1 }; glMaterialfv(GL_FRONT, GL_EMISSION, noEm);
         glPopMatrix();
+    }
+};
+
+// -------------------------------------------------------
+// [Room 2 추가] 아나모픽 퍼즐 클래스 (기존 클래스 상속 X, 독립적 운영)
+// -------------------------------------------------------
+class AnamorphicPuzzle {
+public:
+    struct Piece {
+        vec3 pos;
+        vec3 scale;
+        vec3 rot;
+    };
+    vector<Piece> pieces;
+
+    vec3 projectorPos;
+    vec3 lookAtTarget;
+    GLuint texID;
+
+    AnamorphicPuzzle() {
+        // [위치 조정] Room 1의 뒤쪽 공간(Z < -20)에 배치
+        projectorPos = vec3(12.0f, 4.0f, -32.0f);
+        lookAtTarget = vec3(0.0f, 5.0f, -50.0f);
+        texID = 0;
+    }
+
+    void Init(const char* texturePath) {
+        float spreadX = 13.0f; float spreadY = 9.0f; float spreadZ = 13.0f;
+        float centerY = 5.0f; float centerZ = -45.0f;
+        float minSize = 1.0f; float maxSize = 2.0f;
+
+        int w, h;
+        unsigned char* data = LoadBMP(texturePath, &w, &h);
+        if (data) {
+            glGenTextures(1, &texID);
+            glBindTexture(GL_TEXTURE_2D, texID);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            delete[] data;
+        }
+
+        pieces.clear();
+        for (int i = 0; i < 100; i++) {
+            Piece p;
+            float r1 = (rand() % 1000) / 1000.0f;
+            float r2 = (rand() % 1000) / 1000.0f;
+            float r3 = (rand() % 1000) / 1000.0f;
+            float r4 = (rand() % 1000) / 1000.0f;
+
+            float rx = (r1 * spreadX) - (spreadX / 2.0f);
+            float ry = (r2 * spreadY) - (spreadY / 2.0f) + centerY;
+            float rz = (r3 * spreadZ) - (spreadZ / 2.0f) + centerZ;
+
+            p.pos = vec3(rx, ry, rz);
+            float scale = minSize + (r4 * (maxSize - minSize));
+            p.scale = vec3(scale, scale, scale);
+            p.rot = vec3(rand() % 360, rand() % 360, rand() % 360);
+            pieces.push_back(p);
+        }
+    }
+
+    vec2 GetProjectedUV(vec3 worldPos) {
+        mat4 view = lookAt(projectorPos, lookAtTarget, vec3(0, 1, 0));
+        mat4 proj = perspective(radians(45.0f), (float)800 / 600, 0.1f, 100.0f);
+        vec4 clipSpace = proj * view * vec4(worldPos, 1.0f);
+        vec3 ndc = vec3(clipSpace) / clipSpace.w;
+        return vec2(ndc.x * 0.5f + 0.5f, ndc.y * 0.5f + 0.5f);
+    }
+
+    void Draw() {
+        if (texID == 0) return;
+        glDisable(GL_LIGHTING);
+        glEnable(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, texID);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
+        for (const auto& p : pieces) {
+            glPushMatrix();
+            glTranslatef(p.pos.x, p.pos.y, p.pos.z);
+            glRotatef(p.rot.x, 1, 0, 0); glRotatef(p.rot.y, 0, 1, 0); glRotatef(p.rot.z, 0, 0, 1);
+            float s = p.scale.x / 2.0f;
+
+            // 단순 큐브 그리기 + UV 매핑
+            glBegin(GL_QUADS);
+            vec3 v[8] = { {-s,-s, s}, { s,-s, s}, { s, s, s}, {-s, s, s}, {-s,-s,-s}, { s,-s,-s}, { s, s,-s}, {-s, s,-s} };
+            int faces[6][4] = { {0,1,2,3}, {5,4,7,6}, {4,0,3,7}, {1,5,6,2}, {3,2,6,7}, {4,5,1,0} };
+
+            mat4 model = mat4(1.0f);
+            model = translate(model, p.pos);
+            model = rotate(model, radians(p.rot.x), vec3(1, 0, 0));
+            model = rotate(model, radians(p.rot.y), vec3(0, 1, 0));
+            model = rotate(model, radians(p.rot.z), vec3(0, 0, 1));
+
+            for (int i = 0; i < 6; i++) {
+                for (int j = 0; j < 4; j++) {
+                    vec3 localPos = v[faces[i][j]];
+                    vec4 worldPos4 = model * vec4(localPos, 1.0f);
+                    vec2 uv = GetProjectedUV(vec3(worldPos4));
+                    glTexCoord2f(uv.x, uv.y);
+                    glVertex3f(localPos.x, localPos.y, localPos.z);
+                }
+            }
+            glEnd();
+            glPopMatrix();
+        }
+        glDisable(GL_TEXTURE_2D);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        glEnable(GL_LIGHTING);
+    }
+
+    bool CheckSolved(vec3 playerPos) {
+        return (distance(playerPos, projectorPos) < 2.0f);
     }
 };
 
@@ -238,11 +369,24 @@ public:
         if (dir == 2) next -= r * vel; if (dir == 3) next += r * vel;
 
         if (next.x > 19) next.x = 19; if (next.x < -19) next.x = -19;
-        if (next.z > 19) next.z = 19; if (next.y < 4) next.y = 4;
+        if (next.y < 4) next.y = 4;
 
-        if (next.z < -19.0f) {
-            if (!clear) next.z = -19.0f;
-            else if (abs(next.x) > 2.0f) next.z = -19.0f;
+        // [Room 2 수정] 이동 제한 로직 변경
+        if (!clear) {
+            // 클리어 전: 기존 제한 유지
+            if (next.z > 19) next.z = 19;
+            if (next.z < -19.0f) next.z = -19.0f;
+        }
+        else {
+            // 클리어 후: Room 2(-60)까지 이동 허용
+            if (next.z > 19) next.z = 19;
+            if (next.z < -59.0f) next.z = -59.0f; // Room 2 끝
+
+            // 문 통과 로직 (문 주변 벽 충돌)
+            bool insideDoorZone = (next.z < -19.0f && next.z > -21.0f);
+            if (insideDoorZone && abs(next.x) > 2.0f) {
+                next.z = Pos.z; // 벽에 막힘
+            }
         }
         Pos = next;
     }
@@ -256,7 +400,6 @@ Sphere* mySphere;
 WallWithHole* leftWall;
 WallWithHole* rightWall;
 
-// [추가] 유령이었던 벽들을 실체화
 Cube* backWall;
 Cube* ceilingObj;
 Cube* frontWallLeft;
@@ -267,6 +410,13 @@ Cube* exitDoor;
 Cube* floorObj;
 Button* btnLeft;
 Button* btnRight;
+
+// [Room 2 추가] 객체 포인터
+AnamorphicPuzzle myPuzzle;
+Cube* room2Floor;
+Cube* room2Back;
+Cube* room2Left;
+Cube* room2Right;
 
 GameObject* heldObject = nullptr;
 float grabDistance = 0.0f;
@@ -309,16 +459,13 @@ bool IntersectRayAABB(vec3 rayOrigin, vec3 rayDir, AABB box, vec3& hitNormal, fl
     return true;
 }
 
-// [수정] 발판(Platform) 판정 범위 조정
-// 벽의 실제 두께와 뒷판 위치를 고려하여 정확히 벽 위에만 서도록 조정
+// [Room 2 수정] 발판 판정 확장
 float GetFloorHeightAt(vec3 pos) {
-    // 왼쪽 벽 (X: -20, 두께 2 => -19~-21) + 뒷판(두께1 => -21~-22)
-    // 따라서 발판은 대략 -19 ~ -22 범위
     if (pos.x < -19.0f && pos.x > -22.0f && pos.z > -2.0f && pos.z < 2.0f) return 5.5f;
-
-    // 오른쪽 벽 (X: 20, 두께 2 => 19~21) + 뒷판(두께1 => 21~22)
-    // 따라서 발판은 대략 19 ~ 22 범위
     if (pos.x > 19.0f && pos.x < 22.0f && pos.z > -2.0f && pos.z < 2.0f) return 5.5f;
+
+    // Room 2 바닥 체크 (추가됨)
+    if (pos.z < -20.0f && pos.z > -60.0f) return 0.0f;
 
     return 0.0f;
 }
@@ -334,26 +481,36 @@ void InitObjects() {
     leftWall = new WallWithHole(vec3(-20, 7.5, 0), vec3(40, 15, 2), vec3(4, 4, 4), vec3(0.7f, 0.7f, 0.7f), 90.0f);
     rightWall = new WallWithHole(vec3(20, 7.5, 0), vec3(40, 15, 2), vec3(4, 4, 4), vec3(0.7f, 0.7f, 0.7f), -90.0f);
 
-    // [추가] 하드코딩 되어있던 벽들을 실제 객체로 생성
     backWall = new Cube(vec3(0, 7.5, 20), vec3(40, 15, 2), vec3(0.7f, 0.7f, 0.7f));
     ceilingObj = new Cube(vec3(0, 15.5, 0), vec3(40, 1, 40), vec3(0.8f, 0.8f, 0.8f));
 
-    // 앞쪽 벽들 (문 주변)
     frontWallLeft = new Cube(vec3(-12, 7.5, -20), vec3(16, 15, 2), vec3(0.7f, 0.7f, 0.7f));
     frontWallRight = new Cube(vec3(12, 7.5, -20), vec3(16, 15, 2), vec3(0.7f, 0.7f, 0.7f));
     frontDoorTop = new Cube(vec3(0, 12.5, -20), vec3(8, 5, 2), vec3(0.7f, 0.7f, 0.7f));
 
     exitDoor = new Cube(vec3(0, 5, -20), vec3(8, 10, 1), vec3(0.3f, 0.0f, 0.0f));
 
-    // [수정] 버튼 위치를 구멍 뚫린 벽의 두께 정중앙(20.0f)으로 이동
     btnLeft = new Button(vec3(-20.0f, 5.5f, 0.0f), mySphere);
     btnRight = new Button(vec3(20.0f, 5.5f, 0.0f), myCube);
+
+    // [Room 2 추가] 객체 초기화 및 퍼즐 로드
+    room2Floor = new Cube(vec3(0, -0.5, -40), vec3(40, 1, 40), vec3(0.6f, 0.6f, 0.6f));
+    room2Back = new Cube(vec3(0, 7.5, -60), vec3(40, 15, 2), vec3(0.7f, 0.7f, 0.7f));
+    room2Left = new Cube(vec3(-20, 7.5, -40), vec3(2, 15, 40), vec3(0.7f, 0.7f, 0.7f));
+    room2Right = new Cube(vec3(20, 7.5, -40), vec3(2, 15, 40), vec3(0.7f, 0.7f, 0.7f));
+    myPuzzle.Init(textureFilePath);
 }
 
 void UpdateGame() {
     btnLeft->Update();
     btnRight->Update();
     isLevelClear = (btnLeft->isPressed && btnRight->isPressed);
+
+    // [Room 2 추가] 퍼즐 체크
+    if (!isPuzzleClear && isLevelClear && myPuzzle.CheckSolved(mainCamera.Pos)) {
+        cout << "Puzzle Clear!" << endl;
+        isPuzzleClear = true;
+    }
 }
 
 void DrawScene() {
@@ -377,6 +534,19 @@ void DrawScene() {
     leftWall->Draw(); btnLeft->Draw();
     rightWall->Draw(); btnRight->Draw();
 
+    // [Room 2 추가] 렌더링
+    room2Floor->Draw(); room2Back->Draw();
+    room2Left->Draw(); room2Right->Draw();
+    myPuzzle.Draw();
+
+    // 힌트 (빨간 공)
+    if (isLevelClear && !isPuzzleClear) {
+        glPushMatrix();
+        glTranslatef(myPuzzle.projectorPos.x, myPuzzle.projectorPos.y, myPuzzle.projectorPos.z);
+        glColor3f(1, 0, 0); glutWireSphere(0.3f, 10, 10);
+        glPopMatrix();
+    }
+
     if (heldObject) {
         float minDist = 10000.0f;
 
@@ -393,6 +563,10 @@ void DrawScene() {
         obstacles.push_back(frontWallRight);
         obstacles.push_back(frontDoorTop);
         obstacles.push_back(exitDoor);
+
+        // [Room 2 추가] 벽 충돌 포함
+        obstacles.push_back(room2Floor); obstacles.push_back(room2Back);
+        obstacles.push_back(room2Left); obstacles.push_back(room2Right);
 
         // [핵심] WallWithHole은 통째로 넣지 않고, 내부의 큐브들을 넣는다
         for (auto* p : leftWall->collisionCubes) obstacles.push_back(p);
@@ -475,7 +649,6 @@ void DrawScene() {
 
 void MyTimer(int val) {
     UpdateGame();
-    // [단순화된 물리] 
     if (heldObject != myCube) myCube->UpdatePhysics(0.02f, GetFloorHeightAt(myCube->position));
     if (heldObject != mySphere) mySphere->UpdatePhysics(0.02f, GetFloorHeightAt(mySphere->position));
     glutPostRedisplay();
@@ -536,7 +709,7 @@ int main(int argc, char** argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowSize(windowWidth, windowHeight);
-    glutCreateWindow("Simple Physics Project");
+    glutCreateWindow("Merged Project");
 
     glewInit();
     glEnable(GL_DEPTH_TEST);
