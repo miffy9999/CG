@@ -16,7 +16,7 @@ using namespace std;
 using namespace glm;
 
 // [Room 2 추가] 텍스처 경로 및 퍼즐 변수
-const char* textureFilePath = "Data/wood.bmp";
+const char* textureFilePath = "../Data/Cube.bmp";
 bool isPuzzleClear = false;
 
 // [윈도우 설정]
@@ -349,15 +349,24 @@ public:
 
     AnamorphicPuzzle() {
         // [위치 조정] Room 1의 뒤쪽 공간(Z < -20)에 배치
-        projectorPos = vec3(12.0f, 4.0f, -32.0f);
-        lookAtTarget = vec3(0.0f, 5.0f, -50.0f);
+        projectorPos = vec3(12.0f, 6.0f, -32.0f);
+        lookAtTarget = vec3(-6.0f, 4.0f, -50.0f);
         texID = 0;
     }
 
+    void AddPiece(vec3 position, float size) {
+        Piece p;
+        p.pos = position;
+        p.scale = vec3(size, size, size);
+        p.rot = vec3(rand() % 360, rand() % 360, rand() % 360); // 회전은 랜덤이 자연스러움
+        pieces.push_back(p);
+    }
+
     void Init(const char* texturePath) {
-        float spreadX = 13.0f; float spreadY = 9.0f; float spreadZ = 13.0f;
+        float spreadX = 10.0f; float spreadY = 10.0f; float spreadZ = 9.0f;
         float centerY = 5.0f; float centerZ = -45.0f;
         float minSize = 1.0f; float maxSize = 2.0f;
+
 
         int w, h;
         unsigned char* data = LoadBMP(texturePath, &w, &h);
@@ -365,6 +374,8 @@ public:
             glGenTextures(1, &texID);
             glBindTexture(GL_TEXTURE_2D, texID);
             glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
@@ -372,7 +383,7 @@ public:
         }
 
         pieces.clear();
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 70; i++) {
             Piece p;
             float r1 = (rand() % 1000) / 1000.0f;
             float r2 = (rand() % 1000) / 1000.0f;
@@ -389,14 +400,35 @@ public:
             p.rot = vec3(rand() % 360, rand() % 360, rand() % 360);
             pieces.push_back(p);
         }
-    }
+        AddPiece(vec3(-2.9436f, 5.79062f, -41.6549f), 1.5f);
+        AddPiece(vec3(-2.98785f, 7.13326f, -41.3439f), 1.5f);
+        AddPiece(vec3(-5.13883f, 3.2476f, -43.1836f), 1.5f);
+        AddPiece(vec3(-6.21343f, 5.00316f, -43.7882f), 1.5f);
+        AddPiece(vec3(-3.85938f, 4.98606f, -42.4979f), 1.5f);
+        AddPiece(vec3(-2.17921f, 1.01903f, -44.6914f), 1.5f);
+        AddPiece(vec3(-0.230905f, 1.00076f, -44.5743f), 1.5f);
+        AddPiece(vec3(-2.88306f, 8.65699f, -48.3253f), 1.5f);
+        AddPiece(vec3(-2.315f, 6.79079f, -48.488f), 1.5f);
+        AddPiece(vec3(1.83649f, 6.7563f, -43.5348f), 1.5f);
+         }
 
     vec2 GetProjectedUV(vec3 worldPos) {
+        // 1. 뷰 행렬 (프로젝터가 어디를 바라보는가)
         mat4 view = lookAt(projectorPos, lookAtTarget, vec3(0, 1, 0));
-        mat4 proj = perspective(radians(45.0f), (float)800 / 600, 0.1f, 100.0f);
+
+        // 2. [핵심 수정] 프로젝션 행렬 (렌즈 설정)
+        // (1) 화각(FOV) 수정: 45.0f -> 60.0f (숫자가 커질수록 넓게 보임 = 줌아웃)
+        // (2) 비율 수정: (float)800/600 -> 1.0f (이미지가 정사각형이면 1.0f여야 찌그러지지 않음)
+        mat4 proj = perspective(radians(30.0f), 1.0f, 0.1f, 100.0f);
+
         vec4 clipSpace = proj * view * vec4(worldPos, 1.0f);
         vec3 ndc = vec3(clipSpace) / clipSpace.w;
-        return vec2(ndc.x * 0.5f + 0.5f, ndc.y * 0.5f + 0.5f);
+
+        // 좌우 반전 유지
+        float u = 1.0f - (ndc.x * 0.5f + 0.5f);
+        float v = ndc.y * 0.5f + 0.5f;
+
+        return vec2(u, v);
     }
 
     void Draw() {
@@ -522,6 +554,7 @@ Cube* room2Floor;
 Cube* room2Back;
 Cube* room2Left;
 Cube* room2Right;
+Cube* room2Top;
 
 GameObject* heldObject = nullptr;
 float grabDistance = 0.0f;
@@ -599,10 +632,11 @@ void InitObjects() {
     btnRight = new Button(vec3(20.0f, 5.5f, 0.0f), myCube);
 
     // [Room 2 추가] 객체 초기화 및 퍼즐 로드
-    room2Floor = new Cube(vec3(0, -0.5, -40), vec3(40, 1, 40), vec3(0.6f, 0.6f, 0.6f));
+    room2Floor = new Cube(vec3(0, -0.5, -40), vec3(40, 1, 40), vec3(0.8f, 0.8f, 0.8f));
     room2Back = new Cube(vec3(0, 7.5, -60), vec3(40, 15, 2), vec3(0.7f, 0.7f, 0.7f));
     room2Left = new Cube(vec3(-20, 7.5, -40), vec3(2, 15, 40), vec3(0.7f, 0.7f, 0.7f));
     room2Right = new Cube(vec3(20, 7.5, -40), vec3(2, 15, 40), vec3(0.7f, 0.7f, 0.7f));
+    room2Top = new Cube(vec3(0.0f, 15.5f, -40.0f), vec3(40.0f, 1.0f, 40.0f), vec3(0.6f, 0.6f, 0.6f));
     myPuzzle.Init(textureFilePath);
 }
 
@@ -667,6 +701,7 @@ void DrawScene() {
     // [Room 2 추가] 렌더링
     room2Floor->Draw(); room2Back->Draw();
     room2Left->Draw(); room2Right->Draw();
+    room2Top->Draw();
     myPuzzle.Draw();
 
     // 힌트 (빨간 공)
