@@ -202,7 +202,7 @@ public:
     void Update() {
         float dist = distance(vec3(position.x, 0, position.z), vec3(targetObj->position.x, 0, targetObj->position.z));
         bool onTop = (targetObj->position.y - (targetObj->scale.y / 2.0f)) < (position.y + 0.5f);
-        bool sizeMatch = (targetObj->scale.x > 1.0f && targetObj->scale.x < 3.8f);
+        bool sizeMatch = (targetObj->scale.x > 0.7f && targetObj->scale.x < 4.0f);
 
         if (dist < 1.5f && onTop && sizeMatch) isPressed = true;
         else isPressed = false;
@@ -717,7 +717,7 @@ int main(int argc, char** argv) {
     GLfloat pos[] = { 0, 30, 0, 1 }; glLightfv(GL_LIGHT0, GL_POSITION, pos);
 
     InitObjects();
-
+    
     glutSetCursor(GLUT_CURSOR_NONE);
     glutWarpPointer(windowWidth / 2, windowHeight / 2);
 
