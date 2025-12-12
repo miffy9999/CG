@@ -594,14 +594,64 @@ bool IntersectRayAABB(vec3 rayOrigin, vec3 rayDir, AABB box, vec3& hitNormal, fl
 }
 
 // [Room 2 수정] 발판 판정 확장
-float GetFloorHeightAt(vec3 pos) {
-    if (pos.x < -19.0f && pos.x > -22.0f && pos.z > -2.0f && pos.z < 2.0f) return 5.5f;
-    if (pos.x > 19.0f && pos.x < 22.0f && pos.z > -2.0f && pos.z < 2.0f) return 5.5f;
+//float GetFloorHeightAt(vec3 pos) {
+//    if (pos.x < -19.0f && pos.x > -22.0f && pos.z > -2.0f && pos.z < 2.0f) return 5.5f;
+//    if (pos.x > 19.0f && pos.x < 22.0f && pos.z > -2.0f && pos.z < 2.0f) return 5.5f;
+//
+//    // Room 2 바닥 체크 (추가됨)
+//    if (pos.z < -20.0f && pos.z > -60.0f) return 0.0f;
+//
+//    return 0.0f;
+//}
 
-    // Room 2 바닥 체크 (추가됨)
-    if (pos.z < -20.0f && pos.z > -60.0f) return 0.0f;
+// [도우미 함수] 두 물체가 XZ 평면상에서 겹치는지 확인 (높이 무시)
+bool CheckOverlapXZ(vec3 posA, vec3 scaleA, vec3 posB, vec3 scaleB) {
+    float halfAX = scaleA.x / 2.0f; float halfAZ = scaleA.z / 2.0f;
+    float halfBX = scaleB.x / 2.0f; float halfBZ = scaleB.z / 2.0f;
 
-    return 0.0f;
+    bool collisionX = (posA.x - halfAX < posB.x + halfBX) && (posA.x + halfAX > posB.x - halfBX);
+    bool collisionZ = (posA.z - halfAZ < posB.z + halfBZ) && (posA.z + halfAZ > posB.z - halfBZ);
+
+    return collisionX && collisionZ;
+}
+
+// [수정됨] 물체의 위치와 크기를 받아 가장 높은 바닥 높이를 반환
+float GetFloorHeightAt(vec3 pos, vec3 scale) {
+    float height = 0.0f; // 기본 바닥 높이
+
+    // 1. 기존 발판 체크 (단순 좌표 체크 유지)
+    if (pos.x < -19.0f && pos.x > -22.0f && pos.z > -2.0f && pos.z < 2.0f) height = 5.5f;
+    else if (pos.x > 19.0f && pos.x < 22.0f && pos.z > -2.0f && pos.z < 2.0f) height = 5.5f;
+
+    // Room 2 바닥
+    else if (pos.z < -20.0f && pos.z > -60.0f) height = 0.0f;
+
+    // 2. [추가됨] 벽 구조물(CollisionCubes) 위인지 체크
+    // 검사할 벽 리스트 생성
+    vector<Cube*> wallParts;
+    if (leftWall) for (auto c : leftWall->collisionCubes) wallParts.push_back(c);
+    if (rightWall) for (auto c : rightWall->collisionCubes) wallParts.push_back(c);
+
+    // 벽 구성요소들과 겹치는지 확인
+    for (auto c : wallParts) {
+        // XZ 평면에서 물체가 벽의 파트 위에 있는지 확인 (걸쳐있는 경우 포함)
+        if (CheckOverlapXZ(pos, scale, c->position, c->scale)) {
+
+            // 벽 파트의 윗면 높이 계산
+            float topY = c->position.y + (c->scale.y / 2.0f);
+
+            // 물체가 해당 파트보다 위에 있거나, 살짝 겹쳐있을 때만 '바닥'으로 인정
+            // (물체 바닥이 파트 윗면보다 너무 아래에 있으면 옆에서 부딪힌 것이므로 바닥 아님)
+            float objBottom = pos.y - (scale.y / 2.0f);
+
+            // "물체 바닥"이 "벽 윗면 - 0.5f" 보다 높으면 밟은 것으로 판정
+            if (objBottom >= topY - 1.0f) {
+                if (topY > height) height = topY;
+            }
+        }
+    }
+
+    return height;
 }
 
 void InitObjects() {
@@ -829,18 +879,43 @@ void DrawScene() {
     glutSwapBuffers();
 }
 
+//void MyTimer(int val) {
+//    UpdateGame();
+//    if (heldObject != myCube) {
+//        myCube->UpdatePhysics(0.02f, GetFloorHeightAt(myCube->position));
+//        myCube->UpdateTrails(false); // 잡고 있지 않음
+//    }
+//    else {
+//        myCube->UpdateTrails(true);  // 잡고 있음
+//    }
+//
+//    if (heldObject != mySphere) {
+//        mySphere->UpdatePhysics(0.02f, GetFloorHeightAt(mySphere->position));
+//        mySphere->UpdateTrails(false);
+//    }
+//    else {
+//        mySphere->UpdateTrails(true);
+//    }
+//
+//    glutPostRedisplay();
+//    glutTimerFunc(16, MyTimer, 0);
+//
+//}
+
 void MyTimer(int val) {
     UpdateGame();
+
+    // [수정] GetFloorHeightAt 호출 시 두 번째 인자로 scale을 전달합니다.
     if (heldObject != myCube) {
-        myCube->UpdatePhysics(0.02f, GetFloorHeightAt(myCube->position));
-        myCube->UpdateTrails(false); // 잡고 있지 않음
+        myCube->UpdatePhysics(0.02f, GetFloorHeightAt(myCube->position, myCube->scale));
+        myCube->UpdateTrails(false);
     }
     else {
-        myCube->UpdateTrails(true);  // 잡고 있음
+        myCube->UpdateTrails(true);
     }
 
     if (heldObject != mySphere) {
-        mySphere->UpdatePhysics(0.02f, GetFloorHeightAt(mySphere->position));
+        mySphere->UpdatePhysics(0.02f, GetFloorHeightAt(mySphere->position, mySphere->scale));
         mySphere->UpdateTrails(false);
     }
     else {
@@ -849,7 +924,6 @@ void MyTimer(int val) {
 
     glutPostRedisplay();
     glutTimerFunc(16, MyTimer, 0);
-
 }
 
 void MyMouse(int button, int state, int x, int y) {
