@@ -8,9 +8,9 @@
 #include <vector>
 #include <iostream>
 #include <algorithm> 
-#include <fstream> // [Room 2 추가] 파일 입출력
-#include <deque> // 덱(Deque) 컨테이너 사용
-#include <utility> // pair 사용
+#include <fstream> 
+#include <deque> 
+#include <utility> 
 
 using namespace std;
 using namespace glm;
@@ -141,7 +141,7 @@ public:
                 glScalef(t.second.x, t.second.y, t.second.z);
 
                 // 안개 느낌을 위해 흰색/회색 계열로 설정하고 투명도 적용
-                glColor4f(0.8f, 0.8f, 0.9f, alpha);
+                glColor4f(0.8f, 0.6f, 0.4f, alpha);
                 glutSolidCube(1.0f);
                 glPopMatrix();
 
@@ -204,8 +204,8 @@ public:
                 glTranslatef(t.first.x, t.first.y, t.first.z);
                 glScalef(t.second.x, t.second.y, t.second.z);
 
-                // 안개 색상 (약간 푸른끼 도는 회색)
-                glColor4f(0.8f, 0.8f, 0.9f, alpha);
+                // 안개 색상
+                glColor4f(0.5f, 0.8f, 1.0f, alpha);
                 glutSolidSphere(0.5f, 16, 16); // 잔상은 폴리곤 좀 줄여서 가볍게
                 glPopMatrix();
 
@@ -236,7 +236,7 @@ public:
 };
 
 // -------------------------------------------------------
-// [구멍 뚫린 벽] (기존 유지)
+// [구멍 뚫린 벽] 
 // -------------------------------------------------------
 class WallWithHole : public GameObject {
 public:
@@ -332,7 +332,7 @@ public:
 };
 
 // -------------------------------------------------------
-// [Room 2 추가] 아나모픽 퍼즐 클래스 (기존 클래스 상속 X, 독립적 운영)
+// [Room 2 추가] 아나모픽 퍼즐 클래스 
 // -------------------------------------------------------
 class AnamorphicPuzzle {
 public:
@@ -413,12 +413,8 @@ public:
          }
 
     vec2 GetProjectedUV(vec3 worldPos) {
-        // 1. 뷰 행렬 (프로젝터가 어디를 바라보는가)
         mat4 view = lookAt(projectorPos, lookAtTarget, vec3(0, 1, 0));
 
-        // 2. [핵심 수정] 프로젝션 행렬 (렌즈 설정)
-        // (1) 화각(FOV) 수정: 45.0f -> 60.0f (숫자가 커질수록 넓게 보임 = 줌아웃)
-        // (2) 비율 수정: (float)800/600 -> 1.0f (이미지가 정사각형이면 1.0f여야 찌그러지지 않음)
         mat4 proj = perspective(radians(30.0f), 1.0f, 0.1f, 100.0f);
 
         vec4 clipSpace = proj * view * vec4(worldPos, 1.0f);
@@ -508,7 +504,7 @@ public:
         if (next.x > 19) next.x = 19; if (next.x < -19) next.x = -19;
         if (next.y < 4) next.y = 4;
 
-        // [Room 2 수정] 이동 제한 로직 변경
+        // 이동 제한 로직 변경
         if (!clear) {
             // 클리어 전: 기존 제한 유지
             if (next.z > 19) next.z = 19;
