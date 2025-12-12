@@ -723,18 +723,23 @@ bool CheckOverlapXZ(vec3 posA, vec3 scaleA, vec3 posB, vec3 scaleB) {
 float GetFloorHeightAt(vec3 pos, vec3 scale) {
     float height = 0.0f; // 기본 바닥 높이
 
-    // 1. 기존 발판 체크 (단순 좌표 체크 유지)
+    // 1. 기존 발판 체크 (Room 1 바닥)
     if (pos.x < -19.0f && pos.x > -22.0f && pos.z > -2.0f && pos.z < 2.0f) height = 5.5f;
     else if (pos.x > 19.0f && pos.x < 22.0f && pos.z > -2.0f && pos.z < 2.0f) height = 5.5f;
 
     // Room 2 바닥
     else if (pos.z < -20.0f && pos.z > -60.0f) height = 0.0f;
 
-    // 2. [추가됨] 벽 구조물(CollisionCubes) 위인지 체크
+    // 2. [수정] 벽 구조물(CollisionCubes) 위인지 체크
     // 검사할 벽 리스트 생성
     vector<Cube*> wallParts;
+
+    // Room 1 벽 추가
     if (leftWall) for (auto c : leftWall->collisionCubes) wallParts.push_back(c);
     if (rightWall) for (auto c : rightWall->collisionCubes) wallParts.push_back(c);
+
+    // [추가] Room 2 오른쪽 벽도 물리 충돌(발판 판정)에 추가
+    if (room2RightHole) for (auto c : room2RightHole->collisionCubes) wallParts.push_back(c);
 
     // 벽 구성요소들과 겹치는지 확인
     for (auto c : wallParts) {
@@ -745,10 +750,9 @@ float GetFloorHeightAt(vec3 pos, vec3 scale) {
             float topY = c->position.y + (c->scale.y / 2.0f);
 
             // 물체가 해당 파트보다 위에 있거나, 살짝 겹쳐있을 때만 '바닥'으로 인정
-            // (물체 바닥이 파트 윗면보다 너무 아래에 있으면 옆에서 부딪힌 것이므로 바닥 아님)
             float objBottom = pos.y - (scale.y / 2.0f);
 
-            // "물체 바닥"이 "벽 윗면 - 0.5f" 보다 높으면 밟은 것으로 판정
+            // "물체 바닥"이 "벽 윗면 - 1.0f" 보다 높으면 밟은 것으로 판정
             if (objBottom >= topY - 1.0f) {
                 if (topY > height) height = topY;
             }
@@ -840,7 +844,7 @@ void InitObjects() {
     mySphere->isStatic = false;
     floorObj = new Cube(vec3(0, -0.5, 0), vec3(40, 1, 40), vec3(0.8f, 0.8f, 0.8f));
 
-    // [구멍 벽] 내부에서 collisionCubes 생성됨
+    // [Room 1] 벽 생성
     leftWall = new WallWithHole(vec3(-20, 7.5, 0), vec3(40, 15, 2), vec3(4, 4, 4), vec3(0.7f, 0.7f, 0.7f), 90.0f);
     rightWall = new WallWithHole(vec3(20, 7.5, 0), vec3(40, 15, 2), vec3(4, 4, 4), vec3(0.7f, 0.7f, 0.7f), -90.0f);
 
@@ -856,28 +860,32 @@ void InitObjects() {
     btnLeft = new Button(vec3(-20.0f, 5.5f, 0.0f), mySphere);
     btnRight = new Button(vec3(20.0f, 5.5f, 0.0f), myCube);
 
-    // [Room 2 추가] 객체 초기화 및 퍼즐 로드
+    // [Room 2] 객체 초기화
     room2Floor = new Cube(vec3(0, -0.5, -40), vec3(40, 1, 40), vec3(0.8f, 0.8f, 0.8f));
     room2Back = new Cube(vec3(0, 7.5, -60), vec3(40, 15, 2), vec3(0.7f, 0.7f, 0.7f));
+
+    // 왼쪽 벽은 기존처럼 일반 Cube로 유지 (원하시면 WallWithHole로 변경 가능)
     room2Left = new Cube(vec3(-20, 7.5, -40), vec3(2, 15, 40), vec3(0.7f, 0.7f, 0.7f));
 
-    // [수정] Room 2 오른쪽 벽을 구멍 벽으로 생성
+    // [수정] Room 2 오른쪽 벽을 Room 1 오른쪽 벽(rightWall)과 동일한 스펙으로 생성
+    // 위치(Z)는 -40, 회전각 -90도, 크기 및 구멍 크기는 위쪽 rightWall과 동일
     room2RightHole = new WallWithHole(vec3(20, 7.5, -40), vec3(40, 15, 2), vec3(4, 4, 4), vec3(0.7f, 0.7f, 0.7f), -90.0f);
 
     room2Top = new Cube(vec3(0.0f, 15.5f, -40.0f), vec3(40.0f, 1.0f, 40.0f), vec3(0.6f, 0.6f, 0.6f));
 
-    // [수정] Room 2 큐브 (기폭제) 생성
     room2KeyCube = new Cube(vec3(0.0f, 5.0f, -50.0f), vec3(2, 2, 2), vec3(1.0f, 0.2f, 0.2f));
-    room2KeyCube->isStatic = false; // 물리 적용
+    room2KeyCube->isStatic = false;
 
-    // [수정] Room 2 버튼 (타겟: room2KeyCube)
-    btnRoom2 = new Button(vec3(20.0f, 5.5f, -40.0f), room2KeyCube);
     
-    //대신박스
+
+    // 아나모픽 퍼즐용 박스
     rotatedBox = new Cube(vec3(1.8f, 5.2f, -42.0f), vec3(4.6f, 4.6f, 4.6f), vec3(1.0f, 1.0f, 1.0f));
     rotatedBox->rotation = vec3(95.0f, 67.0f, 18.0f);
     rotatedBox->isStatic = true;
     rotatedBox->SetTextures("Data/redcube.bmp", "Data/bluecube.bmp", "Data/yellowcube.bmp");
+    
+    // Room 2 버튼
+    btnRoom2 = new Button(vec3(20.0f, 5.5f, -40.0f), rotatedBox);
 
     myPuzzle.Init(textureFilePath);
     srand(time(NULL));
@@ -1073,8 +1081,6 @@ void DrawScene() {
         vector<GameObject*> obstacles;
         if (heldObject != myCube) obstacles.push_back(myCube);
         if (heldObject != mySphere) obstacles.push_back(mySphere);
-        // [추가] 새 큐브도 충돌체에 추가
-        if (heldObject != rotatedBox) obstacles.push_back(rotatedBox);
 
         // 바닥, 뒷벽, 천장, 앞벽 등등 모두 추가
         obstacles.push_back(floorObj);
@@ -1093,13 +1099,17 @@ void DrawScene() {
         // [Room 2 추가] 벽 충돌 포함
         obstacles.push_back(room2Floor); obstacles.push_back(room2Back);
         obstacles.push_back(room2Left);
-        if (rotatedBox) obstacles.push_back(rotatedBox);
+        
         // room2RightHole 내부 큐브들 추가
-        for (auto* p : room2RightHole->collisionCubes) obstacles.push_back(p);
+        if (room2RightHole) {
+            for (auto* p : room2RightHole->collisionCubes) {
+                obstacles.push_back(p);
+            }
+        }
 
-        // [핵심] WallWithHole은 통째로 넣지 않고, 내부의 큐브들을 넣는다
-        for (auto* p : leftWall->collisionCubes) obstacles.push_back(p);
-        for (auto* p : rightWall->collisionCubes) obstacles.push_back(p);
+        if (leftWall) for (auto* p : leftWall->collisionCubes) obstacles.push_back(p);
+        if (rightWall) for (auto* p : rightWall->collisionCubes) obstacles.push_back(p);
+
 
         // 레이캐스트 및 충돌 처리
         for (auto* obs : obstacles) {
@@ -1220,6 +1230,15 @@ void MyTimer(int val) {
     else {
         mySphere->UpdateTrails(true);
     }
+
+    if (heldObject != rotatedBox) {
+        rotatedBox->UpdatePhysics(0.02f, GetFloorHeightAt(rotatedBox->position, rotatedBox->scale));
+        rotatedBox->UpdateTrails(false);
+    }
+    else {
+        rotatedBox->UpdateTrails(true);
+    }
+
     if (isPuzzleClear && rotatedBox) {
         if (heldObject != rotatedBox) {
             // 바닥 높이 계산하여 물리 적용
