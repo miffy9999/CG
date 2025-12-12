@@ -109,6 +109,7 @@ public:
     }
 
     virtual void Draw() = 0;
+    virtual void DrawShadow(float* shadowMat) = 0;
 };
 
 // -------------------------------------------------------
@@ -149,6 +150,31 @@ public:
             glDisable(GL_BLEND);
         }
     }
+
+    // 그림자 그리기 구현
+    void DrawShadow(float* shadowMat) override {
+        if (!shadowMat) return; // 방어 코드
+
+        glPushMatrix();
+        // 1. 그림자 투영 행렬 먼저 적용 (월드 기준)
+        glMultMatrixf(shadowMat);
+
+        // 2. 오브젝트의 위치/회전/크기 적용
+        glTranslatef(position.x, position.y, position.z);
+        glRotatef(rotation.y, 0, 1, 0);
+        glScalef(scale.x, scale.y, scale.z);
+
+        // 3. 검은색 설정 및 조명 끄기
+        glDisable(GL_LIGHTING);
+        glColor3f(0.0f, 0.0f, 0.0f);
+
+        // 4. 그리기
+        glutSolidCube(1.0f);
+
+        // 5. 복구
+        glEnable(GL_LIGHTING);
+        glPopMatrix();
+    }
 };
 
 // -------------------------------------------------------
@@ -187,6 +213,25 @@ public:
             }
             glDisable(GL_BLEND);
         }
+    }
+
+    // 그림자 그리기 구현
+    void DrawShadow(float* shadowMat) override {
+        if (!shadowMat) return;
+
+        glPushMatrix();
+        glMultMatrixf(shadowMat); // 행렬 적용
+
+        glTranslatef(position.x, position.y, position.z);
+        glScalef(scale.x, scale.y, scale.z);
+
+        glDisable(GL_LIGHTING);
+        glColor3f(0.0f, 0.0f, 0.0f);
+
+        glutSolidSphere(0.5f, 32, 32); // 구체 그리기
+
+        glEnable(GL_LIGHTING);
+        glPopMatrix();
     }
 };
 
@@ -241,6 +286,10 @@ public:
         for (Cube* c : collisionCubes) {
             c->Draw();
         }
+    }
+
+    void DrawShadow(float* shadowMat) {
+
     }
 };
 
@@ -557,6 +606,31 @@ void InitObjects() {
     myPuzzle.Init(textureFilePath);
 }
 
+// [그림자] 투영 행렬 생성 함수
+void SetShadowMatrix(float* matrix, float* lightPos, float* plane) {
+    float dot = plane[0] * lightPos[0] + plane[1] * lightPos[1] + plane[2] * lightPos[2] + plane[3] * lightPos[3];
+
+    matrix[0] = dot - lightPos[0] * plane[0];
+    matrix[4] = -lightPos[0] * plane[1];
+    matrix[8] = -lightPos[0] * plane[2];
+    matrix[12] = -lightPos[0] * plane[3];
+
+    matrix[1] = -lightPos[1] * plane[0];
+    matrix[5] = dot - lightPos[1] * plane[1];
+    matrix[9] = -lightPos[1] * plane[2];
+    matrix[13] = -lightPos[1] * plane[3];
+
+    matrix[2] = -lightPos[2] * plane[0];
+    matrix[6] = -lightPos[2] * plane[1];
+    matrix[10] = dot - lightPos[2] * plane[2];
+    matrix[14] = -lightPos[2] * plane[3];
+
+    matrix[3] = -lightPos[3] * plane[0];
+    matrix[7] = -lightPos[3] * plane[1];
+    matrix[11] = -lightPos[3] * plane[2];
+    matrix[15] = dot - lightPos[3] * plane[3];
+}
+
 void UpdateGame() {
     btnLeft->Update();
     btnRight->Update();
@@ -690,6 +764,27 @@ void DrawScene() {
         heldObject->velocity = vec3(0);
     }
 
+    // [그림자 준비]
+    float lightPos[] = { 0.0f, 30.0f, 0.0f, 1.0f }; // 조명 위치
+    float floorPlane[] = { 0.0f, 1.0f, 0.0f, 0.0f }; // 바닥 평면 (y=0)
+    float shadowMat[16];
+    SetShadowMatrix(shadowMat, lightPos, floorPlane);
+
+    // [그림자 그리기]
+    // 바닥과 겹침 방지(Z-Fighting)를 위해 아주 살짝 띄움 (Y축 +0.01)
+    glPushMatrix();
+    glTranslatef(0.0f, 0.01f, 0.0f);
+
+    // 투명한 검은색 그림자를 원하면 블렌딩 추가 (선택사항)
+    // glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // glColor4f(0, 0, 0, 0.5f); // DrawShadow 안의 glColor3f를 glColor4f로 바꿔야 적용됨
+
+    if (myCube) myCube->DrawShadow(shadowMat);
+    if (mySphere) mySphere->DrawShadow(shadowMat);
+
+    // glDisable(GL_BLEND);
+    glPopMatrix();
+
     myCube->Draw();
     mySphere->Draw();
 
@@ -788,7 +883,7 @@ int main(int argc, char** argv) {
     GLfloat pos[] = { 0, 30, 0, 1 }; glLightfv(GL_LIGHT0, GL_POSITION, pos);
 
     InitObjects();
-    
+
     glutSetCursor(GLUT_CURSOR_NONE);
     glutWarpPointer(windowWidth / 2, windowHeight / 2);
 
