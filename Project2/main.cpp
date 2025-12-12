@@ -67,8 +67,8 @@ float transitionTime = 0.0f; // 0.0 ~ 1.0 진행도
 
 // 카메라 애니메이션용 시작/목표 변수
 vec3 startCamPos, startCamTarget, startCamUp;
-vec3 endCamPos(0.0f, 80.0f, 0.0f);     // 목표 위치 (탑다운)
-vec3 endCamTarget(0.0f, 0.0f, -40.0f);    // 목표 주시점 (방 중앙)
+vec3 endCamPos(0.0f, 80.0f, -20.0f);     // 목표 위치 (탑다운)
+vec3 endCamTarget(0.0f, 0.0f, -20.0f);    // 목표 주시점 (방 중앙)
 vec3 endCamUp(0.0f, 0.0f, -1.0f);         // 목표 Up 벡터
 
 // -------------------------------------------------------
@@ -863,7 +863,6 @@ void UpdateGame() {
             // 잡고 있는 물체 놓기
             heldObject = nullptr;
 
-            cout << "Button Pressed! Moving Camera..." << endl;
         }
     }
     else if (currentState == STATE_TRANSITION) {
@@ -879,7 +878,7 @@ void UpdateGame() {
             newExplosion(vec3(0, 5.5, -40), 0, NUM_PARTICLES / 2, 0, NUM_DEBRIS / 2);
 
             explosionSequenceTimer = 0; // 연쇄 폭발 타이머 초기화
-            cout << "Boom! Room 2 Exploded." << endl;
+
         }
     }
     else if (currentState == STATE_EXPLODED) {
@@ -891,7 +890,7 @@ void UpdateGame() {
             isRoom1Exploded = true;
             // [2차 폭발] Room 1 (파티클 뒤쪽 절반 사용)
             newExplosion(vec3(0, 5.5, 0), NUM_PARTICLES / 2, NUM_PARTICLES / 2, NUM_DEBRIS / 2, NUM_DEBRIS / 2);
-            cout << "Boom! Room 1 Exploded." << endl;
+
         }
     }
 }
