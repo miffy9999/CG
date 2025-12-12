@@ -96,14 +96,14 @@ public:
         force = vec3(0.0f);
     }
 
-    void UpdateTrails() {
-        // 움직이고 있거나(속도 > 0.5f)
-        if (length(velocity) > 0.5f) {
-            trails.push_front({ position, scale });
-            if (trails.size() > 5) trails.pop_back();
+    void UpdateTrails(bool isHeld) {
+        // 잡았을 때
+        if (isHeld) {
+            trails.push_front({ position, scale }); // 현재 상태 저장
+            if (trails.size() > 7) trails.pop_back(); // 최대 10개
         }
         else {
-            // 속도가 느리거나, 잡고 있어서 멈췄을 때는 잔상이 서서히 사라짐
+            // 움직임이 멈추면 잔상이 서서히 사라짐
             if (!trails.empty()) trails.pop_back();
         }
     }
@@ -137,7 +137,6 @@ public:
             for (auto& t : trails) {
                 glPushMatrix();
                 glTranslatef(t.first.x, t.first.y, t.first.z);
-                // 회전은 0이라고 가정 (필요시 저장 가능)
                 glScalef(t.second.x, t.second.y, t.second.z);
 
                 // 안개 느낌을 위해 흰색/회색 계열로 설정하고 투명도 적용
@@ -706,11 +705,21 @@ void DrawScene() {
 
 void MyTimer(int val) {
     UpdateGame();
-    if (heldObject != myCube) myCube->UpdatePhysics(0.02f, GetFloorHeightAt(myCube->position));
-    if (heldObject != mySphere) mySphere->UpdatePhysics(0.02f, GetFloorHeightAt(mySphere->position));
+    if (heldObject != myCube) {
+        myCube->UpdatePhysics(0.02f, GetFloorHeightAt(myCube->position));
+        myCube->UpdateTrails(false); // 잡고 있지 않음
+    }
+    else {
+        myCube->UpdateTrails(true);  // 잡고 있음
+    }
 
-    myCube->UpdateTrails();
-    mySphere->UpdateTrails();
+    if (heldObject != mySphere) {
+        mySphere->UpdatePhysics(0.02f, GetFloorHeightAt(mySphere->position));
+        mySphere->UpdateTrails(false);
+    }
+    else {
+        mySphere->UpdateTrails(true);
+    }
 
     glutPostRedisplay();
     glutTimerFunc(16, MyTimer, 0);
