@@ -71,6 +71,8 @@ vec3 endCamPos(0.0f, 80.0f, -20.0f);     // 목표 위치 (탑다운)
 vec3 endCamTarget(0.0f, 0.0f, -20.0f);    // 목표 주시점 (방 중앙)
 vec3 endCamUp(0.0f, 0.0f, -1.0f);         // 목표 Up 벡터
 
+GLuint skyTextureID; // 스카이박스 텍스처 ID 저장
+
 // -------------------------------------------------------
 // [BMP 로더 함수]
 // -------------------------------------------------------
@@ -109,6 +111,31 @@ GLuint LoadTexture(const char* filename) {
     delete[] data;
     return id;
 }
+
+void InitSkybox() {
+    int w, h;
+    // 경로에 주의하세요. 실행 파일과 같은 위치면 "Sky.bmp", 아니면 "../Data/Sky.bmp" 등
+    unsigned char* data = LoadBMP("../Data/Sky.bmp", &w, &h);
+
+    if (data) {
+        glGenTextures(1, &skyTextureID);
+        glBindTexture(GL_TEXTURE_2D, skyTextureID);
+
+        // 텍스처 파라미터 설정 (우주 배경이므로 반복되게 설정)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        delete[] data;
+        cout << "Skybox Texture Loaded!" << endl;
+    }
+    else {
+        cout << "Failed to load Skybox Texture!" << endl;
+    }
+}
+
 // -------------------------------------------------------
 // [기본 오브젝트 클래스]
 // -------------------------------------------------------
@@ -838,6 +865,7 @@ void UpdateParticles() {
 }
 
 void InitObjects() {
+    InitSkybox();
     myCube = new Cube(vec3(5, 5, 5), vec3(2, 2, 2), vec3(0.8f, 0.6f, 0.4f));
     myCube->isStatic = false;
     mySphere = new Sphere(vec3(-5, 5, 5), vec3(2, 2, 2), vec3(0.2f, 0.6f, 1.0f));
@@ -969,37 +997,103 @@ void UpdateGame() {
     }
 }
 
+void DrawSkybox(vec3 pos) {
+    if (skyTextureID == 0) return;
+
+    glPushMatrix();
+
+    // 전달받은 위치로 스카이박스 이동 (항상 카메라 중심)
+    glTranslatef(pos.x, pos.y, pos.z);
+
+    // 2. 렌더링 설정 끄기 (조명 X, 깊이 쓰기 X)
+    glDisable(GL_LIGHTING);
+    glDepthMask(GL_FALSE);
+
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, skyTextureID);
+    glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+
+    float s = 40.0f; // [중요] 크기를 zFar(100.0)보다 작게 설정 (잘림 방지)
+
+    // 3. 정육면체 그리기 (안쪽을 바라보도록 텍스처 매핑)
+    glBegin(GL_QUADS);
+    // Front face
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-s, -s, s);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(s, -s, s);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(s, s, s);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-s, s, s);
+    // Back face
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-s, -s, -s);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(-s, s, -s);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(s, s, -s);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(s, -s, -s);
+    // Top face
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-s, s, -s);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-s, s, s);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(s, s, s);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(s, s, -s);
+    // Bottom face
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(-s, -s, -s);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(s, -s, -s);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(s, -s, s);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-s, -s, s);
+    // Right face
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(s, -s, -s);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(s, s, -s);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(s, s, s);
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(s, -s, s);
+    // Left face
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-s, -s, -s);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-s, -s, s);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(-s, s, s);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-s, s, -s);
+    glEnd();
+
+    // 4. 설정 복구
+    glDisable(GL_TEXTURE_2D);
+    glDepthMask(GL_TRUE); // 깊이 쓰기 다시 켜기
+    glEnable(GL_LIGHTING);
+
+    glPopMatrix();
+}
+
 void DrawScene() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
 
-    // [수정] 상태별 카메라 뷰 처리
+    vec3 renderPos; // [추가] 현재 프레임에서 카메라가 있는 위치
+
+    // [수정] 상태별 카메라 뷰 처리 및 renderPos 갱신
     if (currentState == STATE_NORMAL) {
-        // 일반 1인칭 시점
-        vec3 target = mainCamera.Pos + mainCamera.Front;
-        gluLookAt(mainCamera.Pos.x, mainCamera.Pos.y, mainCamera.Pos.z,
+        renderPos = mainCamera.Pos; // 일반 상태 위치
+        vec3 target = renderPos + mainCamera.Front;
+        gluLookAt(renderPos.x, renderPos.y, renderPos.z,
             target.x, target.y, target.z, mainCamera.Up.x, mainCamera.Up.y, mainCamera.Up.z);
     }
     else if (currentState == STATE_TRANSITION) {
         // 카메라 이동 중 (선형 보간)
         float t = transitionTime;
-        // Smoothstep (부드러운 가감속) 적용
         t = t * t * (3 - 2 * t);
 
         vec3 curPos = startCamPos * (1.0f - t) + endCamPos * t;
         vec3 curTarget = startCamTarget * (1.0f - t) + endCamTarget * t;
         vec3 curUp = startCamUp * (1.0f - t) + endCamUp * t;
 
+        renderPos = curPos; // [중요] 이동 중인 위치 저장
+
         gluLookAt(curPos.x, curPos.y, curPos.z,
             curTarget.x, curTarget.y, curTarget.z,
             curUp.x, curUp.y, curUp.z);
     }
     else if (currentState == STATE_EXPLODED) {
-        // 폭발 후 탑다운 고정
+        renderPos = endCamPos; // 폭발 후 위치
         gluLookAt(endCamPos.x, endCamPos.y, endCamPos.z,
             endCamTarget.x, endCamTarget.y, endCamTarget.z,
             endCamUp.x, endCamUp.y, endCamUp.z);
     }
+
+    // [수정] 결정된 카메라 위치를 전달하여 그림
+    DrawSkybox(renderPos);
 
     // [드로잉] Room 1 객체들
     // [수정] Room 1이 폭발하지 않았을 때만 그림
