@@ -7,10 +7,33 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <vector>
 #include <iostream>
-#include <algorithm> 
-#include <fstream> 
-#include <deque> 
-#include <utility> 
+#include <algorithm>
+#include <fstream>
+#include <deque>
+#include <utility>
+#include <math.h>
+#include <time.h>
+
+// -------------------------------------------------------
+// [전역 설정]
+// -------------------------------------------------------
+#define NUM_PARTICLES    4000    // 파티클 총 개수
+#define NUM_DEBRIS       1000    // 파편 총 개수
+
+struct particleData {
+    float position[3];
+    float speed[3];
+    float color[3];
+};
+
+struct debrisData {
+    float position[3];
+    float speed[3];
+    float orientation[3];
+    float orientationSpeed[3];
+    float color[3];
+    float scale[3];
+};
 
 using namespace std;
 using namespace glm;
@@ -24,9 +47,32 @@ int windowWidth = 1000;
 int windowHeight = 800;
 
 bool isLevelClear = false;
+particleData particles[NUM_PARTICLES];
+debrisData debris[NUM_DEBRIS];
+int fuel = 0;               // 폭발 지속 시간
+
+bool isRoom2Exploded = false; // Room 2 폭발 상태
+bool isRoom1Exploded = false; // [추가] Room 1 폭발 상태
+int explosionSequenceTimer = 0; // [추가] 연쇄 폭발 타이머
+
+// [수정] 카메라 애니메이션 및 상태 관리를 위한 변수 추가
+enum GameState {
+    STATE_NORMAL,       // 평상시
+    STATE_TRANSITION,   // 카메라 이동 중
+    STATE_EXPLODED      // 폭발 시퀀스 진행 중 (탑다운 뷰)
+};
+
+GameState currentState = STATE_NORMAL;
+float transitionTime = 0.0f; // 0.0 ~ 1.0 진행도
+
+// 카메라 애니메이션용 시작/목표 변수
+vec3 startCamPos, startCamTarget, startCamUp;
+vec3 endCamPos(0.0f, 80.0f, 0.0f);     // 목표 위치 (탑다운)
+vec3 endCamTarget(0.0f, 0.0f, -40.0f);    // 목표 주시점 (방 중앙)
+vec3 endCamUp(0.0f, 0.0f, -1.0f);         // 목표 Up 벡터
 
 // -------------------------------------------------------
-// [Room 2 추가] BMP 로더 함수 (기존 코드 영향 없음)
+// [BMP 로더 함수]
 // -------------------------------------------------------
 unsigned char* LoadBMP(const char* filename, int* width, int* height) {
     FILE* file = fopen(filename, "rb");
@@ -47,7 +93,7 @@ unsigned char* LoadBMP(const char* filename, int* width, int* height) {
 }
 
 // -------------------------------------------------------
-// [기본 오브젝트 클래스] (기존 유지)
+// [기본 오브젝트 클래스]
 // -------------------------------------------------------
 class GameObject {
 public:
@@ -113,7 +159,7 @@ public:
 };
 
 // -------------------------------------------------------
-// [큐브] (기존 유지)
+// [큐브]
 // -------------------------------------------------------
 class Cube : public GameObject {
 public:
@@ -129,7 +175,7 @@ public:
         glColor3f(color.r, color.g, color.b);
         glutSolidCube(1.0f);
         glPopMatrix();
-        // [추가된 부분: 안개 잔상 그리기]
+
         if (!trails.empty()) {
             glEnable(GL_BLEND); // 투명도 켜기
             glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -139,12 +185,9 @@ public:
                 glPushMatrix();
                 glTranslatef(t.first.x, t.first.y, t.first.z);
                 glScalef(t.second.x, t.second.y, t.second.z);
-
-                // 안개 느낌을 위해 흰색/회색 계열로 설정하고 투명도 적용
                 glColor4f(0.8f, 0.6f, 0.4f, alpha);
                 glutSolidCube(1.0f);
                 glPopMatrix();
-
                 alpha -= 0.05f; // 뒤로 갈수록 투명해짐
             }
             glDisable(GL_BLEND);
@@ -153,7 +196,7 @@ public:
 
     // 그림자 그리기 구현
     void DrawShadow(float* shadowMat) override {
-        if (!shadowMat) return; // 방어 코드
+        if (!shadowMat) return;
 
         glPushMatrix();
         // 1. 그림자 투영 행렬 먼저 적용 (월드 기준)
@@ -178,7 +221,7 @@ public:
 };
 
 // -------------------------------------------------------
-// [구체] (기존 유지)
+// [구체]
 // -------------------------------------------------------
 class Sphere : public GameObject {
 public:
@@ -203,33 +246,25 @@ public:
                 glPushMatrix();
                 glTranslatef(t.first.x, t.first.y, t.first.z);
                 glScalef(t.second.x, t.second.y, t.second.z);
-
-                // 안개 색상
                 glColor4f(0.5f, 0.8f, 1.0f, alpha);
-                glutSolidSphere(0.5f, 16, 16); // 잔상은 폴리곤 좀 줄여서 가볍게
+                glutSolidSphere(0.5f, 16, 16);
                 glPopMatrix();
-
                 alpha -= 0.05f;
             }
             glDisable(GL_BLEND);
         }
     }
 
-    // 그림자 그리기 구현
     void DrawShadow(float* shadowMat) override {
         if (!shadowMat) return;
 
         glPushMatrix();
-        glMultMatrixf(shadowMat); // 행렬 적용
-
+        glMultMatrixf(shadowMat);
         glTranslatef(position.x, position.y, position.z);
         glScalef(scale.x, scale.y, scale.z);
-
         glDisable(GL_LIGHTING);
         glColor3f(0.0f, 0.0f, 0.0f);
-
-        glutSolidSphere(0.5f, 32, 32); // 구체 그리기
-
+        glutSolidSphere(0.5f, 32, 32);
         glEnable(GL_LIGHTING);
         glPopMatrix();
     }
@@ -256,7 +291,6 @@ public:
         float topH = (h - hh) / 2.0f;
         float sideW = (w - hw) / 2.0f;
 
-        // 로컬 좌표계 기준 부품 생성
         parts[0] = { vec3(0, (hh + topH) / 2.0f, 0), vec3(w, topH, thick) }; // 상
         parts[1] = { vec3(0, -(hh + topH) / 2.0f, 0), vec3(w, topH, thick) }; // 하
         parts[2] = { vec3(-(hw + sideW) / 2.0f, 0, 0), vec3(sideW, hh, thick) }; // 좌
@@ -288,13 +322,11 @@ public:
         }
     }
 
-    void DrawShadow(float* shadowMat) {
-
-    }
+    void DrawShadow(float* shadowMat) {}
 };
 
 // -------------------------------------------------------
-// [버튼] (기존 유지)
+// [버튼]
 // -------------------------------------------------------
 class Button {
 public:
@@ -305,6 +337,8 @@ public:
     Button(vec3 pos, GameObject* target) : position(pos), targetObj(target), isPressed(false) {}
 
     void Update() {
+        if (!targetObj) { isPressed = false; return; }
+
         float dist = distance(vec3(position.x, 0, position.z), vec3(targetObj->position.x, 0, targetObj->position.z));
         bool onTop = (targetObj->position.y - (targetObj->scale.y / 2.0f)) < (position.y + 0.5f);
         bool sizeMatch = (targetObj->scale.x > 0.7f && targetObj->scale.x < 4.0f);
@@ -410,13 +444,11 @@ public:
         AddPiece(vec3(-2.88306f, 8.65699f, -48.3253f), 1.5f);
         AddPiece(vec3(-2.315f, 6.79079f, -48.488f), 1.5f);
         AddPiece(vec3(1.83649f, 6.7563f, -43.5348f), 1.5f);
-         }
+    }
 
     vec2 GetProjectedUV(vec3 worldPos) {
         mat4 view = lookAt(projectorPos, lookAtTarget, vec3(0, 1, 0));
-
         mat4 proj = perspective(radians(30.0f), 1.0f, 0.1f, 100.0f);
-
         vec4 clipSpace = proj * view * vec4(worldPos, 1.0f);
         vec3 ndc = vec3(clipSpace) / clipSpace.w;
 
@@ -489,11 +521,15 @@ public:
         Front = normalize(front);
     }
     void ProcessMouse(float x, float y) {
+        if (isRoom2Exploded) return; // 폭발 후 시점 고정
+
         Yaw += x * 0.1f; Pitch += y * 0.1f;
         if (Pitch > 89.0f) Pitch = 89.0f; if (Pitch < -89.0f) Pitch = -89.0f;
         UpdateVectors();
     }
     void ProcessKey(int dir, bool clear) {
+        if (isRoom2Exploded) return; // 폭발 후 이동 금지
+
         float vel = 0.5f;
         vec3 f = normalize(vec3(Front.x, 0, Front.z));
         vec3 r = normalize(cross(f, Up));
@@ -549,8 +585,10 @@ AnamorphicPuzzle myPuzzle;
 Cube* room2Floor;
 Cube* room2Back;
 Cube* room2Left;
-Cube* room2Right;
 Cube* room2Top;
+WallWithHole* room2RightHole;
+Button* btnRoom2;
+Cube* room2KeyCube; // Room 2 기폭장치용 큐브
 
 GameObject* heldObject = nullptr;
 float grabDistance = 0.0f;
@@ -604,6 +642,81 @@ float GetFloorHeightAt(vec3 pos) {
     return 0.0f;
 }
 
+void newSpeed(float dest[3]) {
+    float x, y, z, len;
+    x = (2.0 * ((GLfloat)rand()) / ((GLfloat)RAND_MAX)) - 1.0;
+    y = (2.0 * ((GLfloat)rand()) / ((GLfloat)RAND_MAX)) - 1.0;
+    z = (2.0 * ((GLfloat)rand()) / ((GLfloat)RAND_MAX)) - 1.0;
+    len = sqrt(x * x + y * y + z * z);
+    if (len) { x /= len; y /= len; z /= len; }
+    // 폭발력을 위해 속도 증폭
+    dest[0] = x * 1.5f; dest[1] = y * 1.5f; dest[2] = z * 1.5f;
+}
+
+// [수정] 폭발 함수: 위치와 파티클 인덱스 범위 지정 가능
+void newExplosion(vec3 pos, int startIdx, int pCount, int dStartIdx, int dCount) {
+    for (int i = startIdx; i < startIdx + pCount; i++) {
+        particles[i].position[0] = pos.x;
+        particles[i].position[1] = pos.y;
+        particles[i].position[2] = pos.z;
+
+        // [수정] 불꽃 색상 랜덤 (흰색, 노랑, 주황, 빨강)
+        int colorType = rand() % 3;
+        if (colorType == 0) { // 흰색/노랑 (가장 뜨거운 부분)
+            particles[i].color[0] = 1.0f; particles[i].color[1] = 1.0f; particles[i].color[2] = 0.8f;
+        }
+        else if (colorType == 1) { // 주황
+            particles[i].color[0] = 1.0f; particles[i].color[1] = 0.5f; particles[i].color[2] = 0.0f;
+        }
+        else { // 빨강
+            particles[i].color[0] = 1.0f; particles[i].color[1] = 0.0f; particles[i].color[2] = 0.0f;
+        }
+
+        newSpeed(particles[i].speed);
+    }
+
+    for (int i = dStartIdx; i < dStartIdx + dCount; i++) {
+        debris[i].position[0] = pos.x;
+        debris[i].position[1] = pos.y;
+        debris[i].position[2] = pos.z;
+
+        debris[i].orientation[0] = 0.0; debris[i].orientation[1] = 0.0; debris[i].orientation[2] = 0.0;
+
+        // [수정] 파편 색상을 어두운 회색/검정으로 (타버린 잔해 느낌)
+        debris[i].color[0] = 0.3f; debris[i].color[1] = 0.3f; debris[i].color[2] = 0.3f;
+
+        debris[i].scale[0] = (2.0 * ((GLfloat)rand()) / ((GLfloat)RAND_MAX)) - 1.0;
+        debris[i].scale[1] = (2.0 * ((GLfloat)rand()) / ((GLfloat)RAND_MAX)) - 1.0;
+        debris[i].scale[2] = (2.0 * ((GLfloat)rand()) / ((GLfloat)RAND_MAX)) - 1.0;
+
+        newSpeed(debris[i].speed);
+        newSpeed(debris[i].orientationSpeed);
+    }
+    fuel = 500; // 폭발 지속 시간 리셋
+}
+
+void UpdateParticles() {
+    if (fuel > 0) {
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            particles[i].position[0] += particles[i].speed[0] * 0.2f;
+            particles[i].position[1] += particles[i].speed[1] * 0.2f;
+            particles[i].position[2] += particles[i].speed[2] * 0.2f;
+            particles[i].color[0] -= 1.0f / 500.0f; if (particles[i].color[0] < 0) particles[i].color[0] = 0;
+            particles[i].color[1] -= 1.0f / 100.0f; if (particles[i].color[1] < 0) particles[i].color[1] = 0;
+            particles[i].color[2] -= 1.0f / 50.0f; if (particles[i].color[2] < 0) particles[i].color[2] = 0;
+        }
+        for (int i = 0; i < NUM_DEBRIS; i++) {
+            debris[i].position[0] += debris[i].speed[0] * 0.1f;
+            debris[i].position[1] += debris[i].speed[1] * 0.1f;
+            debris[i].position[2] += debris[i].speed[2] * 0.1f;
+            debris[i].orientation[0] += debris[i].orientationSpeed[0] * 10.0f;
+            debris[i].orientation[1] += debris[i].orientationSpeed[1] * 10.0f;
+            debris[i].orientation[2] += debris[i].orientationSpeed[2] * 10.0f;
+        }
+        fuel--; // [중요] fuel이 0이 되면 멈추지만, 연쇄 폭발 시 fuel을 다시 500으로 설정하므로 문제 없음
+    }
+}
+
 void InitObjects() {
     myCube = new Cube(vec3(5, 5, 5), vec3(2, 2, 2), vec3(0.8f, 0.6f, 0.4f));
     myCube->isStatic = false;
@@ -631,9 +744,21 @@ void InitObjects() {
     room2Floor = new Cube(vec3(0, -0.5, -40), vec3(40, 1, 40), vec3(0.8f, 0.8f, 0.8f));
     room2Back = new Cube(vec3(0, 7.5, -60), vec3(40, 15, 2), vec3(0.7f, 0.7f, 0.7f));
     room2Left = new Cube(vec3(-20, 7.5, -40), vec3(2, 15, 40), vec3(0.7f, 0.7f, 0.7f));
-    room2Right = new Cube(vec3(20, 7.5, -40), vec3(2, 15, 40), vec3(0.7f, 0.7f, 0.7f));
+
+    // [수정] Room 2 오른쪽 벽을 구멍 벽으로 생성
+    room2RightHole = new WallWithHole(vec3(20, 7.5, -40), vec3(40, 15, 2), vec3(4, 4, 4), vec3(0.7f, 0.7f, 0.7f), -90.0f);
+
     room2Top = new Cube(vec3(0.0f, 15.5f, -40.0f), vec3(40.0f, 1.0f, 40.0f), vec3(0.6f, 0.6f, 0.6f));
+
+    // [수정] Room 2 큐브 (기폭제) 생성
+    room2KeyCube = new Cube(vec3(0.0f, 5.0f, -50.0f), vec3(2, 2, 2), vec3(1.0f, 0.2f, 0.2f));
+    room2KeyCube->isStatic = false; // 물리 적용
+
+    // [수정] Room 2 버튼 (타겟: room2KeyCube)
+    btnRoom2 = new Button(vec3(20.0f, 5.5f, -40.0f), room2KeyCube);
+
     myPuzzle.Init(textureFilePath);
+    srand(time(NULL));
 }
 
 // [그림자] 투영 행렬 생성 함수
@@ -671,34 +796,153 @@ void UpdateGame() {
         cout << "Puzzle Clear!" << endl;
         isPuzzleClear = true;
     }
+
+    // [수정] 버튼 클릭 시 카메라 이동 시퀀스 시작
+    if (currentState == STATE_NORMAL) {
+        btnRoom2->Update();
+        if (btnRoom2->isPressed) {
+            // 버튼이 눌리면 즉시 이동 상태로 변경
+            currentState = STATE_TRANSITION;
+            transitionTime = 0.0f;
+
+            // 현재 카메라 위치 저장
+            startCamPos = mainCamera.Pos;
+            startCamTarget = mainCamera.Pos + mainCamera.Front;
+            startCamUp = mainCamera.Up;
+
+            // 잡고 있는 물체 놓기
+            heldObject = nullptr;
+
+            cout << "Button Pressed! Moving Camera..." << endl;
+        }
+    }
+    else if (currentState == STATE_TRANSITION) {
+        // 카메라 이동 애니메이션 진행 (천천히)
+        transitionTime += 0.005f;
+
+        if (transitionTime >= 1.0f) {
+            transitionTime = 1.0f;
+            currentState = STATE_EXPLODED;
+
+            // [1차 폭발] Room 2 (파티클 앞쪽 절반 사용)
+            isRoom2Exploded = true;
+            newExplosion(vec3(0, 5.5, -40), 0, NUM_PARTICLES / 2, 0, NUM_DEBRIS / 2);
+
+            explosionSequenceTimer = 0; // 연쇄 폭발 타이머 초기화
+            cout << "Boom! Room 2 Exploded." << endl;
+        }
+    }
+    else if (currentState == STATE_EXPLODED) {
+        // [2차 폭발 로직]
+        explosionSequenceTimer++;
+
+        // 약 2초(120프레임) 뒤에 Room 1 폭발
+        if (!isRoom1Exploded && explosionSequenceTimer > 120) {
+            isRoom1Exploded = true;
+            // [2차 폭발] Room 1 (파티클 뒤쪽 절반 사용)
+            newExplosion(vec3(0, 5.5, 0), NUM_PARTICLES / 2, NUM_PARTICLES / 2, NUM_DEBRIS / 2, NUM_DEBRIS / 2);
+            cout << "Boom! Room 1 Exploded." << endl;
+        }
+    }
 }
 
 void DrawScene() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
 
-    vec3 target = mainCamera.Pos + mainCamera.Front;
-    gluLookAt(mainCamera.Pos.x, mainCamera.Pos.y, mainCamera.Pos.z,
-        target.x, target.y, target.z, mainCamera.Up.x, mainCamera.Up.y, mainCamera.Up.z);
+    // [수정] 상태별 카메라 뷰 처리
+    if (currentState == STATE_NORMAL) {
+        // 일반 1인칭 시점
+        vec3 target = mainCamera.Pos + mainCamera.Front;
+        gluLookAt(mainCamera.Pos.x, mainCamera.Pos.y, mainCamera.Pos.z,
+            target.x, target.y, target.z, mainCamera.Up.x, mainCamera.Up.y, mainCamera.Up.z);
+    }
+    else if (currentState == STATE_TRANSITION) {
+        // 카메라 이동 중 (선형 보간)
+        float t = transitionTime;
+        // Smoothstep (부드러운 가감속) 적용
+        t = t * t * (3 - 2 * t);
 
-    // [드로잉] 모든 객체를 Draw 함수로 그리기
-    floorObj->Draw();
-    backWall->Draw();
-    ceilingObj->Draw();
-    frontWallLeft->Draw();
-    frontWallRight->Draw();
-    frontDoorTop->Draw();
+        vec3 curPos = startCamPos * (1.0f - t) + endCamPos * t;
+        vec3 curTarget = startCamTarget * (1.0f - t) + endCamTarget * t;
+        vec3 curUp = startCamUp * (1.0f - t) + endCamUp * t;
 
-    if (!isLevelClear) exitDoor->Draw();
+        gluLookAt(curPos.x, curPos.y, curPos.z,
+            curTarget.x, curTarget.y, curTarget.z,
+            curUp.x, curUp.y, curUp.z);
+    }
+    else if (currentState == STATE_EXPLODED) {
+        // 폭발 후 탑다운 고정
+        gluLookAt(endCamPos.x, endCamPos.y, endCamPos.z,
+            endCamTarget.x, endCamTarget.y, endCamTarget.z,
+            endCamUp.x, endCamUp.y, endCamUp.z);
+    }
 
-    leftWall->Draw(); btnLeft->Draw();
-    rightWall->Draw(); btnRight->Draw();
+    // [드로잉] Room 1 객체들
+    // [수정] Room 1이 폭발하지 않았을 때만 그림
+    if (!isRoom1Exploded) {
+        floorObj->Draw();
+        backWall->Draw();
+        ceilingObj->Draw();
+        frontWallLeft->Draw();
+        frontWallRight->Draw();
+        frontDoorTop->Draw();
 
-    // [Room 2 추가] 렌더링
-    room2Floor->Draw(); room2Back->Draw();
-    room2Left->Draw(); room2Right->Draw();
-    room2Top->Draw();
-    myPuzzle.Draw();
+        if (!isLevelClear) exitDoor->Draw();
+
+        leftWall->Draw(); btnLeft->Draw();
+        rightWall->Draw(); btnRight->Draw();
+    }
+
+    // [Room 2 및 폭발 효과]
+    // 폭발 상태가 아니면(일반, 이동중) 방을 그림
+    if (!isRoom2Exploded) {
+        room2Floor->Draw();
+        room2Back->Draw();
+        room2Left->Draw();
+        room2RightHole->Draw(); // 구멍 벽
+        room2Top->Draw();
+        myPuzzle.Draw();
+    }
+
+    // 2. 버튼과 기폭제 큐브 그리기
+    // 폭발 전까지만 그리기
+    if (currentState != STATE_EXPLODED) {
+        btnRoom2->Draw();
+        room2KeyCube->Draw();
+    }
+
+    // 3. 폭발 효과 (파티클 & 파편) 그리기
+    if (fuel > 0 && currentState == STATE_EXPLODED) {
+        // --- 파티클 그리기 ---
+        glPushMatrix();
+        glDisable(GL_LIGHTING); glDisable(GL_DEPTH_TEST);
+        glPointSize(3.0f);
+        glBegin(GL_POINTS);
+        for (int i = 0; i < NUM_PARTICLES; i++) {
+            glColor3fv(particles[i].color);
+            glVertex3fv(particles[i].position);
+        }
+        glEnd();
+
+        // --- 파편 그리기 ---
+        glEnable(GL_LIGHTING); glEnable(GL_DEPTH_TEST);
+        for (int i = 0; i < NUM_DEBRIS; i++) {
+            glColor3fv(debris[i].color);
+            glPushMatrix();
+            glTranslatef(debris[i].position[0], debris[i].position[1], debris[i].position[2]);
+            glRotatef(debris[i].orientation[0], 1, 0, 0);
+            glRotatef(debris[i].orientation[1], 0, 1, 0);
+            glRotatef(debris[i].orientation[2], 0, 0, 1);
+            glScalef(debris[i].scale[0], debris[i].scale[1], debris[i].scale[2]);
+            glBegin(GL_TRIANGLES);
+            glNormal3f(0.0, 0.0, 1.0);
+            glVertex3f(0.0, 0.5, 0.0); glVertex3f(-0.25, 0.0, 0.0); glVertex3f(0.25, 0.0, 0.0);
+            glEnd();
+            glPopMatrix();
+        }
+        glPopMatrix();
+    }
 
     // 힌트 (빨간 공)
     if (isLevelClear && !isPuzzleClear) {
@@ -708,13 +952,15 @@ void DrawScene() {
         glPopMatrix();
     }
 
-    if (heldObject) {
+    if (heldObject && currentState == STATE_NORMAL) {
         float minDist = 10000.0f;
 
         // [충돌 대상 목록]
         vector<GameObject*> obstacles;
         if (heldObject != myCube) obstacles.push_back(myCube);
         if (heldObject != mySphere) obstacles.push_back(mySphere);
+        // [추가] 새 큐브도 충돌체에 추가
+        if (heldObject != room2KeyCube) obstacles.push_back(room2KeyCube);
 
         // 바닥, 뒷벽, 천장, 앞벽 등등 모두 추가
         obstacles.push_back(floorObj);
@@ -727,7 +973,9 @@ void DrawScene() {
 
         // [Room 2 추가] 벽 충돌 포함
         obstacles.push_back(room2Floor); obstacles.push_back(room2Back);
-        obstacles.push_back(room2Left); obstacles.push_back(room2Right);
+        obstacles.push_back(room2Left);
+        // room2RightHole 내부 큐브들 추가
+        for (auto* p : room2RightHole->collisionCubes) obstacles.push_back(p);
 
         // [핵심] WallWithHole은 통째로 넣지 않고, 내부의 큐브들을 넣는다
         for (auto* p : leftWall->collisionCubes) obstacles.push_back(p);
@@ -806,19 +1054,21 @@ void DrawScene() {
     glPushMatrix();
     glTranslatef(0.0f, 0.01f, 0.0f);
 
-    // 투명한 검은색 그림자를 원하면 블렌딩 추가 (선택사항)
-    // glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    // glColor4f(0, 0, 0, 0.5f); // DrawShadow 안의 glColor3f를 glColor4f로 바꿔야 적용됨
-
     if (myCube) myCube->DrawShadow(shadowMat);
     if (mySphere) mySphere->DrawShadow(shadowMat);
+    // [추가] 새 큐브 그림자 (폭발 전까지만)
+    if (room2KeyCube && currentState != STATE_EXPLODED) room2KeyCube->DrawShadow(shadowMat);
 
     // glDisable(GL_BLEND);
     glPopMatrix();
 
-    myCube->Draw();
-    mySphere->Draw();
+    // [수정] Room 1이 폭발하지 않았을 때만 큐브/구체 그림
+    if (!isRoom1Exploded) {
+        myCube->Draw();
+        mySphere->Draw();
+    }
 
+    // UI 드로잉
     glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); glOrtho(0, windowWidth, 0, windowHeight, -1, 1);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity(); glDisable(GL_LIGHTING); glDisable(GL_DEPTH_TEST);
     glColor3f(1, 1, 1); glBegin(GL_LINES);
@@ -831,6 +1081,9 @@ void DrawScene() {
 
 void MyTimer(int val) {
     UpdateGame();
+    // [추가] 파티클 물리 업데이트
+    UpdateParticles();
+
     if (heldObject != myCube) {
         myCube->UpdatePhysics(0.02f, GetFloorHeightAt(myCube->position));
         myCube->UpdateTrails(false); // 잡고 있지 않음
@@ -847,16 +1100,31 @@ void MyTimer(int val) {
         mySphere->UpdateTrails(true);
     }
 
+    // [추가] Room 2 큐브 물리 업데이트 (폭발 전까지만)
+    if (currentState != STATE_EXPLODED) {
+        if (heldObject != room2KeyCube) {
+            room2KeyCube->UpdatePhysics(0.02f, GetFloorHeightAt(room2KeyCube->position));
+            room2KeyCube->UpdateTrails(false);
+        }
+        else {
+            room2KeyCube->UpdateTrails(true);
+        }
+    }
+
     glutPostRedisplay();
     glutTimerFunc(16, MyTimer, 0);
 
 }
 
 void MyMouse(int button, int state, int x, int y) {
+    if (currentState != STATE_NORMAL) return; // [수정] 이동 중이나 폭발 후 클릭 방지
+
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
         if (heldObject) heldObject = nullptr;
         else {
-            GameObject* objs[] = { myCube, mySphere };
+            // [수정] 잡기 후보에 room2KeyCube 추가
+            GameObject* objs[] = { myCube, mySphere, room2KeyCube };
+
             float minD = 1000.0f;
             GameObject* picked = nullptr;
             for (auto obj : objs) {
@@ -877,6 +1145,8 @@ void MyMouse(int button, int state, int x, int y) {
 }
 
 void MyPassiveMotion(int x, int y) {
+    if (currentState != STATE_NORMAL) return; // [수정] 폭발 후 시점 이동 방지
+
     int cx = windowWidth / 2; int cy = windowHeight / 2;
     if (x == cx && y == cy) return;
     mainCamera.ProcessMouse(x - cx, cy - y);
@@ -885,6 +1155,8 @@ void MyPassiveMotion(int x, int y) {
 }
 
 void MyKeyboard(unsigned char key, int x, int y) {
+    if (currentState != STATE_NORMAL && key != 27) return; // [수정] 폭발 후 키보드 방지 (ESC 제외)
+
     switch (key) {
     case 'w': mainCamera.ProcessKey(0, isLevelClear); break;
     case 's': mainCamera.ProcessKey(1, isLevelClear); break;
