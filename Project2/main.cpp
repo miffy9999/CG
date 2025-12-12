@@ -1129,28 +1129,6 @@ void DrawScene() {
     glutSwapBuffers();
 }
 
-//void MyTimer(int val) {
-//    UpdateGame();
-//    if (heldObject != myCube) {
-//        myCube->UpdatePhysics(0.02f, GetFloorHeightAt(myCube->position));
-//        myCube->UpdateTrails(false); // 잡고 있지 않음
-//    }
-//    else {
-//        myCube->UpdateTrails(true);  // 잡고 있음
-//    }
-//
-//    if (heldObject != mySphere) {
-//        mySphere->UpdatePhysics(0.02f, GetFloorHeightAt(mySphere->position));
-//        mySphere->UpdateTrails(false);
-//    }
-//    else {
-//        mySphere->UpdateTrails(true);
-//    }
-//
-//    glutPostRedisplay();
-//    glutTimerFunc(16, MyTimer, 0);
-//
-//}
 
 void MyTimer(int val) {
     UpdateGame();
@@ -1176,7 +1154,7 @@ void MyTimer(int val) {
     // [추가] Room 2 큐브 물리 업데이트 (폭발 전까지만)
     if (currentState != STATE_EXPLODED) {
         if (heldObject != room2KeyCube) {
-            room2KeyCube->UpdatePhysics(0.02f, GetFloorHeightAt(room2KeyCube->position));
+            room2KeyCube->UpdatePhysics(0.02f, GetFloorHeightAt(room2KeyCube->position,room2KeyCube->scale));
             room2KeyCube->UpdateTrails(false);
         }
         else {
