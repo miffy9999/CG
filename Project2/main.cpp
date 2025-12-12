@@ -230,16 +230,24 @@ public:
     void Draw() override {
         glPushMatrix();
         glTranslatef(position.x, position.y, position.z);
+
         // 3축 회전 적용
         glRotatef(rotation.x, 1, 0, 0);
         glRotatef(rotation.y, 0, 1, 0);
         glRotatef(rotation.z, 0, 0, 1);
+
         glScalef(scale.x, scale.y, scale.z);
 
-        // [분기] 텍스처가 있으면 직접 그리고, 없으면 솔리드 큐브
+        // [분기] 텍스처가 있으면 "조명을 끄고" 그립니다.
         if (hasTexture) {
+            // [▼▼▼ 핵심 변경: 조명 끄기 (Unlit) ▼▼▼]
+            glDisable(GL_LIGHTING);
+
             glEnable(GL_TEXTURE_2D);
-            glColor3f(1.0f, 1.0f, 1.0f); // 텍스처 본연의 색
+            glColor3f(1.0f, 1.0f, 1.0f); // 텍스처 본연의 색 유지
+
+            // 텍스처 색상을 그대로 덮어씌움 (그림자/조명 영향 X)
+            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 
             float s = 0.5f;
 
@@ -265,24 +273,27 @@ public:
             glEnd();
 
             glDisable(GL_TEXTURE_2D);
+
+            // [복구] 다른 물체들을 위해 조명과 텍스처 모드 원상복구
+            glEnable(GL_LIGHTING);
+            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
         }
         else {
-            // 텍스처 없는 일반 큐브 (기존 방식)
+            // 텍스처 없는 일반 큐브 (기존 방식 - 조명 받음)
             glColor3f(color.r, color.g, color.b);
             glutSolidCube(1.0f);
         }
 
         glPopMatrix();
 
-        // 잔상 효과 (기존 코드 유지)
+        // (잔상 효과 코드는 그대로 유지...)
         if (!trails.empty()) {
+            // ... (기존 코드 생략) ...
             glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             float alpha = 0.5f;
             for (auto& t : trails) {
                 glPushMatrix();
                 glTranslatef(t.first.x, t.first.y, t.first.z);
-                // 잔상 회전도 3축 적용
-                // (주의: trails에 회전값은 저장 안 했으므로, 현재 회전값 사용하거나 수정 필요. 일단 현재 회전값 씀)
                 glRotatef(rotation.x, 1, 0, 0); glRotatef(rotation.y, 0, 1, 0); glRotatef(rotation.z, 0, 0, 1);
                 glScalef(t.second.x, t.second.y, t.second.z);
                 glColor4f(0.8f, 0.6f, 0.4f, alpha);
