@@ -9,6 +9,8 @@
 #include <iostream>
 #include <algorithm> 
 #include <fstream> // [Room 2 추가] 파일 입출력
+#include <deque> // 덱(Deque) 컨테이너 사용
+#include <utility> // pair 사용
 
 using namespace std;
 using namespace glm;
@@ -60,6 +62,8 @@ public:
     float mass;
     bool isStatic;
 
+    deque<std::pair<vec3, vec3>> trails;
+
     GameObject(vec3 pos, vec3 sz, vec3 col)
         : position(pos), scale(sz), rotation(0.0f, 0.0f, 0.0f), color(col),
         velocity(0.0f), force(0.0f), mass(1.0f), isStatic(true) {
@@ -92,6 +96,18 @@ public:
         force = vec3(0.0f);
     }
 
+    void UpdateTrails(bool isHeld) {
+        // 잡았을 때
+        if (isHeld) {
+            trails.push_front({ position, scale }); // 현재 상태 저장
+            if (trails.size() > 7) trails.pop_back(); // 최대 10개
+        }
+        else {
+            // 움직임이 멈추면 잔상이 서서히 사라짐
+            if (!trails.empty()) trails.pop_back();
+        }
+    }
+
     virtual void Draw() = 0;
 };
 
@@ -112,6 +128,26 @@ public:
         glColor3f(color.r, color.g, color.b);
         glutSolidCube(1.0f);
         glPopMatrix();
+        // [추가된 부분: 안개 잔상 그리기]
+        if (!trails.empty()) {
+            glEnable(GL_BLEND); // 투명도 켜기
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            float alpha = 0.5f; // 시작 투명도
+            for (auto& t : trails) {
+                glPushMatrix();
+                glTranslatef(t.first.x, t.first.y, t.first.z);
+                glScalef(t.second.x, t.second.y, t.second.z);
+
+                // 안개 느낌을 위해 흰색/회색 계열로 설정하고 투명도 적용
+                glColor4f(0.8f, 0.8f, 0.9f, alpha);
+                glutSolidCube(1.0f);
+                glPopMatrix();
+
+                alpha -= 0.05f; // 뒤로 갈수록 투명해짐
+            }
+            glDisable(GL_BLEND);
+        }
     }
 };
 
@@ -131,6 +167,26 @@ public:
         glColor3f(color.r, color.g, color.b);
         glutSolidSphere(0.5f, 32, 32);
         glPopMatrix();
+
+        if (!trails.empty()) {
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+            float alpha = 0.5f;
+            for (auto& t : trails) {
+                glPushMatrix();
+                glTranslatef(t.first.x, t.first.y, t.first.z);
+                glScalef(t.second.x, t.second.y, t.second.z);
+
+                // 안개 색상 (약간 푸른끼 도는 회색)
+                glColor4f(0.8f, 0.8f, 0.9f, alpha);
+                glutSolidSphere(0.5f, 16, 16); // 잔상은 폴리곤 좀 줄여서 가볍게
+                glPopMatrix();
+
+                alpha -= 0.05f;
+            }
+            glDisable(GL_BLEND);
+        }
     }
 };
 
@@ -649,10 +705,25 @@ void DrawScene() {
 
 void MyTimer(int val) {
     UpdateGame();
-    if (heldObject != myCube) myCube->UpdatePhysics(0.02f, GetFloorHeightAt(myCube->position));
-    if (heldObject != mySphere) mySphere->UpdatePhysics(0.02f, GetFloorHeightAt(mySphere->position));
+    if (heldObject != myCube) {
+        myCube->UpdatePhysics(0.02f, GetFloorHeightAt(myCube->position));
+        myCube->UpdateTrails(false); // 잡고 있지 않음
+    }
+    else {
+        myCube->UpdateTrails(true);  // 잡고 있음
+    }
+
+    if (heldObject != mySphere) {
+        mySphere->UpdatePhysics(0.02f, GetFloorHeightAt(mySphere->position));
+        mySphere->UpdateTrails(false);
+    }
+    else {
+        mySphere->UpdateTrails(true);
+    }
+
     glutPostRedisplay();
     glutTimerFunc(16, MyTimer, 0);
+
 }
 
 void MyMouse(int button, int state, int x, int y) {
@@ -709,7 +780,7 @@ int main(int argc, char** argv) {
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowSize(windowWidth, windowHeight);
-    glutCreateWindow("Merged Project");
+    glutCreateWindow("CG Project");
 
     glewInit();
     glEnable(GL_DEPTH_TEST);
