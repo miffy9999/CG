@@ -680,7 +680,6 @@ Cube* room2Left;
 Cube* room2Top;
 WallWithHole* room2RightHole;
 Button* btnRoom2;
-Cube* room2KeyCube; // Room 2 기폭장치용 큐브
 Cube* rotatedBox;
 
 GameObject* heldObject = nullptr;
@@ -901,9 +900,7 @@ void InitObjects() {
 
     room2Top = new Cube(vec3(0.0f, 15.5f, -40.0f), vec3(40.0f, 1.0f, 40.0f), vec3(0.6f, 0.6f, 0.6f));
 
-    room2KeyCube = new Cube(vec3(0.0f, 5.0f, -50.0f), vec3(2, 2, 2), vec3(1.0f, 0.2f, 0.2f));
-    room2KeyCube->isStatic = false;
-
+   
     
 
     // 아나모픽 퍼즐용 박스
@@ -1133,7 +1130,6 @@ void DrawScene() {
     // 폭발 전까지만 그리기
     if (currentState != STATE_EXPLODED) {
         btnRoom2->Draw();
-        room2KeyCube->Draw();
     }
 
     // 3. 폭발 효과 (파티클 & 파편) 그리기
@@ -1281,7 +1277,6 @@ void DrawScene() {
     if (myCube) myCube->DrawShadow(shadowMat);
     if (mySphere) mySphere->DrawShadow(shadowMat);
     // [추가] 새 큐브 그림자 (폭발 전까지만)
-    if (room2KeyCube && currentState != STATE_EXPLODED) room2KeyCube->DrawShadow(shadowMat);
     if (isPuzzleClear && rotatedBox && !isRoom2Exploded) rotatedBox->DrawShadow(shadowMat);
     // glDisable(GL_BLEND);
     glPopMatrix();
@@ -1343,16 +1338,6 @@ void MyTimer(int val) {
             rotatedBox->UpdateTrails(true); // 잡고 있을 때 잔상
         }
     }
-    // [추가] Room 2 큐브 물리 업데이트 (폭발 전까지만)
-    if (currentState != STATE_EXPLODED) {
-        if (heldObject != room2KeyCube) {
-            room2KeyCube->UpdatePhysics(0.02f, GetFloorHeightAt(room2KeyCube->position,room2KeyCube->scale));
-            room2KeyCube->UpdateTrails(false);
-        }
-        else {
-            room2KeyCube->UpdateTrails(true);
-        }
-    }
 
     glutPostRedisplay();
     glutTimerFunc(16, MyTimer, 0);
@@ -1401,11 +1386,9 @@ void MyMouse(int button, int state, int x, int y) {
         }
         if (heldObject) heldObject = nullptr;
         else {
-            // [수정] 잡기 후보에 room2KeyCube 추가
             vector<GameObject*> pickCandidates;
             pickCandidates.push_back(myCube);
             pickCandidates.push_back(mySphere);
-            pickCandidates.push_back(room2KeyCube);;
             if (isPuzzleClear && rotatedBox) {
                 pickCandidates.push_back(rotatedBox);
             }
