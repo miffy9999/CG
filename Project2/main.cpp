@@ -238,10 +238,8 @@ public:
 
         glScalef(scale.x, scale.y, scale.z);
 
-        // [분기] 텍스처가 있으면 "조명을 끄고" 그립니다.
         if (hasTexture) {
-            // [▼▼▼ 핵심 변경: 조명 끄기 (Unlit) ▼▼▼]
-            glDisable(GL_LIGHTING);
+           glDisable(GL_LIGHTING);
 
             glEnable(GL_TEXTURE_2D);
             glColor3f(1.0f, 1.0f, 1.0f); // 텍스처 본연의 색 유지
@@ -1308,12 +1306,10 @@ void DrawScene() {
 
     // 2. 게임 클리어 텍스트 출력 (마지막 방 폭발 시)
     if (isRoom1Exploded) {
-        glColor3f(1.0f, 1.0f, 0.0f); // 노란색
+        glColor3f(1.0f, 1.0f, 1.0f); // 노란색
         // 텍스트 중앙 정렬 대략적으로 계산
-        RenderText(windowWidth / 2 - 70, windowHeight / 2, "GAME CLEAR !!");
+        RenderText(windowWidth / 2 - 60, windowHeight / 2, "GAME CLEAR");
 
-        glColor3f(1.0f, 1.0f, 1.0f); // 흰색 서브 텍스트
-        RenderText(windowWidth / 2 - 60, windowHeight / 2 - 30, "Press ESC to Exit", GLUT_BITMAP_HELVETICA_18);
     }
 
     glEnable(GL_DEPTH_TEST); glEnable(GL_LIGHTING); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW);
