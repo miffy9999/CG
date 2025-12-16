@@ -49,7 +49,7 @@ int windowHeight = 800;
 bool isLevelClear = false;
 particleData particles[NUM_PARTICLES];
 debrisData debris[NUM_DEBRIS];
-int fuel = 0;               // 폭발 지속 시간
+int fuel = 0;                // 폭발 지속 시간
 
 bool isRoom2Exploded = false; // Room 2 폭발 상태
 bool isRoom1Exploded = false; // [추가] Room 1 폭발 상태
@@ -238,10 +238,8 @@ public:
 
         glScalef(scale.x, scale.y, scale.z);
 
-        // [분기] 텍스처가 있으면 "조명을 끄고" 그립니다.
         if (hasTexture) {
-            // [▼▼▼ 핵심 변경: 조명 끄기 (Unlit) ▼▼▼]
-            glDisable(GL_LIGHTING);
+           glDisable(GL_LIGHTING);
 
             glEnable(GL_TEXTURE_2D);
             glColor3f(1.0f, 1.0f, 1.0f); // 텍스처 본연의 색 유지
@@ -734,17 +732,6 @@ bool IntersectRayAABB(vec3 rayOrigin, vec3 rayDir, AABB box, vec3& hitNormal, fl
     return true;
 }
 
-// [Room 2 수정] 발판 판정 확장
-//float GetFloorHeightAt(vec3 pos) {
-//    if (pos.x < -19.0f && pos.x > -22.0f && pos.z > -2.0f && pos.z < 2.0f) return 5.5f;
-//    if (pos.x > 19.0f && pos.x < 22.0f && pos.z > -2.0f && pos.z < 2.0f) return 5.5f;
-//
-//    // Room 2 바닥 체크 (추가됨)
-//    if (pos.z < -20.0f && pos.z > -60.0f) return 0.0f;
-//
-//    return 0.0f;
-//}
-
 // [도우미 함수] 두 물체가 XZ 평면상에서 겹치는지 확인 (높이 무시)
 bool CheckOverlapXZ(vec3 posA, vec3 scaleA, vec3 posB, vec3 scaleB) {
     float halfAX = scaleA.x / 2.0f; float halfAZ = scaleA.z / 2.0f;
@@ -911,15 +898,13 @@ void InitObjects() {
 
     room2Top = new Cube(vec3(0.0f, 15.5f, -40.0f), vec3(40.0f, 1.0f, 40.0f), vec3(0.6f, 0.6f, 0.6f));
 
-   
-    
 
     // 아나모픽 퍼즐용 박스
     rotatedBox = new Cube(vec3(1.8f, 5.2f, -42.0f), vec3(4.6f, 4.6f, 4.6f), vec3(1.0f, 1.0f, 1.0f));
     rotatedBox->rotation = vec3(95.0f, 67.0f, 18.0f);
     rotatedBox->isStatic = true;
     rotatedBox->SetTextures("Data/redcube.bmp", "Data/bluecube.bmp", "Data/yellowcube.bmp");
-    
+
     // Room 2 버튼
     btnRoom2 = new Button(vec3(20.0f, 5.5f, -40.0f), rotatedBox);
 
@@ -1065,6 +1050,14 @@ void DrawSkybox(vec3 pos) {
     glPopMatrix();
 }
 
+// [추가] 텍스트 렌더링 헬퍼 함수
+void RenderText(float x, float y, const char* text, void* font = GLUT_BITMAP_TIMES_ROMAN_24) {
+    glRasterPos2f(x, y); // 텍스트가 그려질 2D 좌표 설정
+    for (const char* c = text; *c != '\0'; c++) {
+        glutBitmapCharacter(font, *c); // 문자 하나씩 그리기
+    }
+}
+
 void DrawScene() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
@@ -1200,7 +1193,7 @@ void DrawScene() {
         // [Room 2 추가] 벽 충돌 포함
         obstacles.push_back(room2Floor); obstacles.push_back(room2Back);
         obstacles.push_back(room2Left);
-        
+
         // room2RightHole 내부 큐브들 추가
         if (room2RightHole) {
             for (auto* p : room2RightHole->collisionCubes) {
@@ -1298,12 +1291,27 @@ void DrawScene() {
         mySphere->Draw();
     }
 
-    // UI 드로잉
+    // -------------------------------------------------------
+    // [UI 드로잉 (2D 오버레이)] - 게임 클리어 추가됨
+    // -------------------------------------------------------
     glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); glOrtho(0, windowWidth, 0, windowHeight, -1, 1);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity(); glDisable(GL_LIGHTING); glDisable(GL_DEPTH_TEST);
-    glColor3f(1, 1, 1); glBegin(GL_LINES);
-    glVertex2f(windowWidth / 2 - 10, windowHeight / 2); glVertex2f(windowWidth / 2 + 10, windowHeight / 2);
-    glVertex2f(windowWidth / 2, windowHeight / 2 - 10); glVertex2f(windowWidth / 2, windowHeight / 2 + 10); glEnd();
+
+    // 1. 크로스헤어 그리기 (폭발 전까지만)
+    if (currentState != STATE_EXPLODED) {
+        glColor3f(1, 1, 1); glBegin(GL_LINES);
+        glVertex2f(windowWidth / 2 - 10, windowHeight / 2); glVertex2f(windowWidth / 2 + 10, windowHeight / 2);
+        glVertex2f(windowWidth / 2, windowHeight / 2 - 10); glVertex2f(windowWidth / 2, windowHeight / 2 + 10); glEnd();
+    }
+
+    // 2. 게임 클리어 텍스트 출력 (마지막 방 폭발 시)
+    if (isRoom1Exploded) {
+        glColor3f(1.0f, 1.0f, 1.0f); // 노란색
+        // 텍스트 중앙 정렬 대략적으로 계산
+        RenderText(windowWidth / 2 - 60, windowHeight / 2, "GAME CLEAR");
+
+    }
+
     glEnable(GL_DEPTH_TEST); glEnable(GL_LIGHTING); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW);
 
     glutSwapBuffers();
