@@ -14,7 +14,8 @@
 #include <math.h>
 #include <time.h>
 
-#define NUM_PARTICLES    4000   
+
+#define NUM_PARTICLES    4000    
 #define NUM_DEBRIS       1000    
 
 struct particleData {
@@ -35,8 +36,10 @@ struct debrisData {
 using namespace std;
 using namespace glm;
 
+
 const char* textureFilePath = "../Data/Cube.bmp";
 bool isPuzzleClear = false;
+
 
 int windowWidth = 1000;
 int windowHeight = 800;
@@ -44,32 +47,30 @@ int windowHeight = 800;
 bool isLevelClear = false;
 particleData particles[NUM_PARTICLES];
 debrisData debris[NUM_DEBRIS];
-int fuel = 0;  
+int fuel = 0;                
 
 bool isRoom2Exploded = false; 
-bool isRoom1Exploded = false;
+bool isRoom1Exploded = false; 
 int explosionSequenceTimer = 0; 
 
 enum GameState {
-    STATE_NORMAL,      
+    STATE_NORMAL,       
     STATE_TRANSITION,  
-    STATE_EXPLODED     
+    STATE_EXPLODED      
 };
 
 GameState currentState = STATE_NORMAL;
-float transitionTime = 0.0f; // 0.0 ~ 1.0 진행도
+float transitionTime = 0.0f; 
 
-// 카메라 애니메이션용 시작/목표 변수
+
 vec3 startCamPos, startCamTarget, startCamUp;
-vec3 endCamPos(0.0f, 80.0f, -20.0f);     // 목표 위치 (탑다운)
-vec3 endCamTarget(0.0f, 0.0f, -20.0f);    // 목표 주시점 (방 중앙)
-vec3 endCamUp(0.0f, 0.0f, -1.0f);         // 목표 Up 벡터
+vec3 endCamPos(0.0f, 80.0f, -20.0f);     
+vec3 endCamTarget(0.0f, 0.0f, -20.0f);   
+vec3 endCamUp(0.0f, 0.0f, -1.0f);        
 
-GLuint skyTextureID; // 스카이박스 텍스처 ID 저장
+GLuint skyTextureID; 
 
-// -------------------------------------------------------
-// [BMP 로더 함수]
-// -------------------------------------------------------
+
 unsigned char* LoadBMP(const char* filename, int* width, int* height) {
     FILE* file = fopen(filename, "rb");
     if (!file) return NULL;
@@ -91,7 +92,6 @@ GLuint LoadTexture(const char* filename) {
     int w, h;
     unsigned char* data = LoadBMP(filename, &w, &h);
     if (!data) {
-        cout << "텍스처 로드 실패: " << filename << endl;
         return 0;
     }
     GLuint id;
@@ -108,14 +108,12 @@ GLuint LoadTexture(const char* filename) {
 
 void InitSkybox() {
     int w, h;
-    // 경로에 주의하세요. 실행 파일과 같은 위치면 "Sky.bmp", 아니면 "../Data/Sky.bmp" 등
     unsigned char* data = LoadBMP("../Data/Sky.bmp", &w, &h);
 
     if (data) {
         glGenTextures(1, &skyTextureID);
         glBindTexture(GL_TEXTURE_2D, skyTextureID);
 
-        // 텍스처 파라미터 설정 (우주 배경이므로 반복되게 설정)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -130,9 +128,7 @@ void InitSkybox() {
     }
 }
 
-// -------------------------------------------------------
-// [기본 오브젝트 클래스]
-// -------------------------------------------------------
+
 class GameObject {
 public:
     vec3 position;
@@ -140,13 +136,12 @@ public:
     vec3 rotation;
     vec3 color;
 
-    // [물리 변수]
     vec3 velocity;
     vec3 force;
     float mass;
     bool isStatic;
 
-    deque<std::pair<vec3, vec3>> trails;
+    deque<pair<vec3, vec3>> trails;
 
     GameObject(vec3 pos, vec3 sz, vec3 col)
         : position(pos), scale(sz), rotation(0.0f, 0.0f, 0.0f), color(col),
@@ -181,10 +176,9 @@ public:
     }
 
     void UpdateTrails(bool isHeld) {
-        // 잡았을 때
         if (isHeld) {
-            trails.push_front({ position, scale }); // 현재 상태 저장
-            if (trails.size() > 7) trails.pop_back(); // 최대 10개
+            trails.push_front({ position, scale }); 
+            if (trails.size() > 6) trails.pop_back(); 
         }
         else {
             // 움직임이 멈추면 잔상이 서서히 사라짐
@@ -196,12 +190,9 @@ public:
     virtual void DrawShadow(float* shadowMat) = 0;
 };
 
-// -------------------------------------------------------
-// [큐브]
-// -------------------------------------------------------
+
 class Cube : public GameObject {
 public:
-    // 텍스처 ID 저장 (0:앞뒤, 1:위아래, 2:좌우)
     GLuint texIDs[3];
     bool hasTexture;
 
@@ -211,13 +202,11 @@ public:
         hasTexture = false;
     }
 
-    // [추가] 텍스처 설정 함수
     void SetTextures(const char* file1, const char* file2, const char* file3) {
-        texIDs[0] = LoadTexture(file1); // 앞/뒤
-        texIDs[1] = LoadTexture(file2); // 위/아래
-        texIDs[2] = LoadTexture(file3); // 좌/우
+        texIDs[0] = LoadTexture(file1); 
+        texIDs[1] = LoadTexture(file2); 
+        texIDs[2] = LoadTexture(file3); 
 
-        // 하나라도 로드되면 텍스처 모드 활성화
         if (texIDs[0] != 0) hasTexture = true;
     }
 
@@ -225,7 +214,6 @@ public:
         glPushMatrix();
         glTranslatef(position.x, position.y, position.z);
 
-        // 3축 회전 적용
         glRotatef(rotation.x, 1, 0, 0);
         glRotatef(rotation.y, 0, 1, 0);
         glRotatef(rotation.z, 0, 0, 1);
@@ -236,28 +224,25 @@ public:
            glDisable(GL_LIGHTING);
 
             glEnable(GL_TEXTURE_2D);
-            glColor3f(1.0f, 1.0f, 1.0f); // 텍스처 본연의 색 유지
+            glColor3f(1.0f, 1.0f, 1.0f); 
 
-            // 텍스처 색상을 그대로 덮어씌움 (그림자/조명 영향 X)
+            
             glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 
             float s = 0.5f;
 
-            // 1. 앞(Front) / 뒤(Back) -> texIDs[0]
             if (texIDs[0]) glBindTexture(GL_TEXTURE_2D, texIDs[0]);
             glBegin(GL_QUADS);
             glNormal3f(0, 0, 1);  glTexCoord2f(0, 0); glVertex3f(-s, -s, s); glTexCoord2f(1, 0); glVertex3f(s, -s, s); glTexCoord2f(1, 1); glVertex3f(s, s, s); glTexCoord2f(0, 1); glVertex3f(-s, s, s);
             glNormal3f(0, 0, -1); glTexCoord2f(0, 0); glVertex3f(-s, -s, -s); glTexCoord2f(1, 0); glVertex3f(-s, s, -s); glTexCoord2f(1, 1); glVertex3f(s, s, -s); glTexCoord2f(0, 1); glVertex3f(s, -s, -s);
             glEnd();
 
-            // 2. 위(Top) / 아래(Bottom) -> texIDs[1]
             if (texIDs[1]) glBindTexture(GL_TEXTURE_2D, texIDs[1]);
             glBegin(GL_QUADS);
             glNormal3f(0, 1, 0);  glTexCoord2f(0, 0); glVertex3f(-s, s, -s); glTexCoord2f(1, 0); glVertex3f(-s, s, s); glTexCoord2f(1, 1); glVertex3f(s, s, s); glTexCoord2f(0, 1); glVertex3f(s, s, -s);
             glNormal3f(0, -1, 0); glTexCoord2f(0, 0); glVertex3f(-s, -s, -s); glTexCoord2f(1, 0); glVertex3f(-s, -s, s); glTexCoord2f(1, 1); glVertex3f(s, -s, s); glTexCoord2f(0, 1); glVertex3f(s, -s, -s);
             glEnd();
 
-            // 3. 좌(Left) / 우(Right) -> texIDs[2]
             if (texIDs[2]) glBindTexture(GL_TEXTURE_2D, texIDs[2]);
             glBegin(GL_QUADS);
             glNormal3f(-1, 0, 0); glTexCoord2f(0, 0); glVertex3f(-s, -s, -s); glTexCoord2f(1, 0); glVertex3f(-s, -s, s); glTexCoord2f(1, 1); glVertex3f(-s, s, s); glTexCoord2f(0, 1); glVertex3f(-s, s, -s);
@@ -275,7 +260,7 @@ public:
         }
 
         glPopMatrix();
-
+        
         if (!trails.empty()) {
             glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             float alpha = 0.5f;
@@ -310,9 +295,7 @@ public:
     }
 };
 
-// -------------------------------------------------------
-// [구체]
-// -------------------------------------------------------
+
 class Sphere : public GameObject {
 public:
     Sphere(vec3 pos, vec3 sz, vec3 col) : GameObject(pos, sz, col) {
@@ -360,9 +343,7 @@ public:
     }
 };
 
-// -------------------------------------------------------
-// [구멍 뚫린 벽] 
-// -------------------------------------------------------
+
 class WallWithHole : public GameObject {
 public:
     struct SubWall { vec3 pos; vec3 scale; };
@@ -381,10 +362,10 @@ public:
         float topH = (h - hh) / 2.0f;
         float sideW = (w - hw) / 2.0f;
 
-        parts[0] = { vec3(0, (hh + topH) / 2.0f, 0), vec3(w, topH, thick) }; // 상
-        parts[1] = { vec3(0, -(hh + topH) / 2.0f, 0), vec3(w, topH, thick) }; // 하
-        parts[2] = { vec3(-(hw + sideW) / 2.0f, 0, 0), vec3(sideW, hh, thick) }; // 좌
-        parts[3] = { vec3((hw + sideW) / 2.0f, 0, 0), vec3(sideW, hh, thick) }; // 우
+        parts[0] = { vec3(0, (hh + topH) / 2.0f, 0), vec3(w, topH, thick) }; 
+        parts[1] = { vec3(0, -(hh + topH) / 2.0f, 0), vec3(w, topH, thick) }; 
+        parts[2] = { vec3(-(hw + sideW) / 2.0f, 0, 0), vec3(sideW, hh, thick) }; 
+        parts[3] = { vec3((hw + sideW) / 2.0f, 0, 0), vec3(sideW, hh, thick) }; 
         parts[4] = { vec3(0, 0, -thick * 0.75f), vec3(hw, hh, thick / 2.0f) };
 
         float rad = radians(-rotY);
@@ -415,9 +396,7 @@ public:
     void DrawShadow(float* shadowMat) {}
 };
 
-// -------------------------------------------------------
-// [버튼]
-// -------------------------------------------------------
+
 class Button {
 public:
     vec3 position;
@@ -454,6 +433,7 @@ public:
         glPopMatrix();
     }
 };
+
 
 class AnamorphicPuzzle {
 public:
@@ -557,7 +537,6 @@ public:
             glRotatef(p.rot.x, 1, 0, 0); glRotatef(p.rot.y, 0, 1, 0); glRotatef(p.rot.z, 0, 0, 1);
             float s = p.scale.x / 2.0f;
 
-            // 단순 큐브 그리기 + UV 매핑
             glBegin(GL_QUADS);
             vec3 v[8] = { {-s,-s, s}, { s,-s, s}, { s, s, s}, {-s, s, s}, {-s,-s,-s}, { s,-s,-s}, { s, s,-s}, {-s, s,-s} };
             int faces[6][4] = { {0,1,2,3}, {5,4,7,6}, {4,0,3,7}, {1,5,6,2}, {3,2,6,7}, {4,5,1,0} };
@@ -590,9 +569,7 @@ public:
     }
 };
 
-// -------------------------------------------------------
-// [전역 변수]
-// -------------------------------------------------------
+
 class Camera {
 public:
     vec3 Pos, Front, Up;
@@ -606,14 +583,14 @@ public:
         Front = normalize(front);
     }
     void ProcessMouse(float x, float y) {
-        if (isRoom2Exploded) return; // 폭발 후 시점 고정
+        if (isRoom2Exploded) return; 
 
         Yaw += x * 0.1f; Pitch += y * 0.1f;
         if (Pitch > 89.0f) Pitch = 89.0f; if (Pitch < -89.0f) Pitch = -89.0f;
         UpdateVectors();
     }
     void ProcessKey(int dir, bool clear) {
-        if (isRoom2Exploded) return; // 폭발 후 이동 금지
+        if (isRoom2Exploded) return; 
 
         float vel = 0.5f;
         vec3 f = normalize(vec3(Front.x, 0, Front.z));
@@ -625,21 +602,21 @@ public:
         if (next.x > 19) next.x = 19; if (next.x < -19) next.x = -19;
         if (next.y < 4) next.y = 4;
 
-        // 이동 제한 로직 변경
+        
         if (!clear) {
-            // 클리어 전: 기존 제한 유지
+            
             if (next.z > 19) next.z = 19;
             if (next.z < -19.0f) next.z = -19.0f;
         }
         else {
-            // 클리어 후: Room 2(-60)까지 이동 허용
+            
             if (next.z > 19) next.z = 19;
-            if (next.z < -59.0f) next.z = -59.0f; // Room 2 끝
+            if (next.z < -59.0f) next.z = -59.0f; 
 
-            // 문 통과 로직 (문 주변 벽 충돌)
+           
             bool insideDoorZone = (next.z < -19.0f && next.z > -21.0f);
             if (insideDoorZone && abs(next.x) > 2.0f) {
-                next.z = Pos.z; // 벽에 막힘
+                next.z = Pos.z; 
             }
         }
         Pos = next;
@@ -648,7 +625,7 @@ public:
 
 Camera mainCamera(vec3(0.0f, 6.0f, 15.0f));
 
-// 오브젝트 포인터들
+
 Cube* myCube;
 Sphere* mySphere;
 WallWithHole* leftWall;
@@ -665,7 +642,7 @@ Cube* floorObj;
 Button* btnLeft;
 Button* btnRight;
 
-// [Room 2 추가] 객체 포인터
+
 AnamorphicPuzzle myPuzzle;
 Cube* room2Floor;
 Cube* room2Back;
@@ -679,9 +656,7 @@ GameObject* heldObject = nullptr;
 float grabDistance = 0.0f;
 vec3 grabOriginalScale;
 
-// -------------------------------------------------------
-// [충돌 및 유틸 함수]
-// -------------------------------------------------------
+
 struct AABB { vec3 min; vec3 max; };
 
 AABB GetAABB(GameObject* obj) {
@@ -705,7 +680,7 @@ bool IntersectRayAABB(vec3 rayOrigin, vec3 rayDir, AABB box, vec3& hitNormal, fl
 
     hitDist = tmin;
 
-    // 법선 계산 (간단 버전)
+    
     float tminX = std::min(t1, t2); float tminY = std::min(t3, t4); float tminZ = std::min(t5, t6);
     float finalMin = std::max(std::max(tminX, tminY), tminZ);
 
@@ -716,7 +691,7 @@ bool IntersectRayAABB(vec3 rayOrigin, vec3 rayDir, AABB box, vec3& hitNormal, fl
     return true;
 }
 
-// [도우미 함수] 두 물체가 XZ 평면상에서 겹치는지 확인 (높이 무시)
+
 bool CheckOverlapXZ(vec3 posA, vec3 scaleA, vec3 posB, vec3 scaleB) {
     float halfAX = scaleA.x / 2.0f; float halfAZ = scaleA.z / 2.0f;
     float halfBX = scaleB.x / 2.0f; float halfBZ = scaleB.z / 2.0f;
@@ -727,40 +702,32 @@ bool CheckOverlapXZ(vec3 posA, vec3 scaleA, vec3 posB, vec3 scaleB) {
     return collisionX && collisionZ;
 }
 
-// [수정됨] 물체의 위치와 크기를 받아 가장 높은 바닥 높이를 반환
-float GetFloorHeightAt(vec3 pos, vec3 scale) {
-    float height = 0.0f; // 기본 바닥 높이
 
-    // 1. 기존 발판 체크 (Room 1 바닥)
+float GetFloorHeightAt(vec3 pos, vec3 scale) {
+    float height = 0.0f; 
+
+
     if (pos.x < -19.0f && pos.x > -22.0f && pos.z > -2.0f && pos.z < 2.0f) height = 5.5f;
     else if (pos.x > 19.0f && pos.x < 22.0f && pos.z > -2.0f && pos.z < 2.0f) height = 5.5f;
 
-    // Room 2 바닥
+
     else if (pos.z < -20.0f && pos.z > -60.0f) height = 0.0f;
 
-    // 2. [수정] 벽 구조물(CollisionCubes) 위인지 체크
-    // 검사할 벽 리스트 생성
+    
     vector<Cube*> wallParts;
 
-    // Room 1 벽 추가
     if (leftWall) for (auto c : leftWall->collisionCubes) wallParts.push_back(c);
     if (rightWall) for (auto c : rightWall->collisionCubes) wallParts.push_back(c);
 
-    // [추가] Room 2 오른쪽 벽도 물리 충돌(발판 판정)에 추가
     if (room2RightHole) for (auto c : room2RightHole->collisionCubes) wallParts.push_back(c);
 
-    // 벽 구성요소들과 겹치는지 확인
     for (auto c : wallParts) {
-        // XZ 평면에서 물체가 벽의 파트 위에 있는지 확인 (걸쳐있는 경우 포함)
         if (CheckOverlapXZ(pos, scale, c->position, c->scale)) {
 
-            // 벽 파트의 윗면 높이 계산
-            float topY = c->position.y + (c->scale.y / 2.0f);
+           float topY = c->position.y + (c->scale.y / 2.0f);
 
-            // 물체가 해당 파트보다 위에 있거나, 살짝 겹쳐있을 때만 '바닥'으로 인정
             float objBottom = pos.y - (scale.y / 2.0f);
 
-            // "물체 바닥"이 "벽 윗면 - 1.0f" 보다 높으면 밟은 것으로 판정
             if (objBottom >= topY - 1.0f) {
                 if (topY > height) height = topY;
             }
@@ -777,26 +744,23 @@ void newSpeed(float dest[3]) {
     z = (2.0 * ((GLfloat)rand()) / ((GLfloat)RAND_MAX)) - 1.0;
     len = sqrt(x * x + y * y + z * z);
     if (len) { x /= len; y /= len; z /= len; }
-    // 폭발력을 위해 속도 증폭
     dest[0] = x * 1.5f; dest[1] = y * 1.5f; dest[2] = z * 1.5f;
 }
 
-// [수정] 폭발 함수: 위치와 파티클 인덱스 범위 지정 가능
 void newExplosion(vec3 pos, int startIdx, int pCount, int dStartIdx, int dCount) {
     for (int i = startIdx; i < startIdx + pCount; i++) {
         particles[i].position[0] = pos.x;
         particles[i].position[1] = pos.y;
         particles[i].position[2] = pos.z;
 
-        // [수정] 불꽃 색상 랜덤 (흰색, 노랑, 주황, 빨강)
         int colorType = rand() % 3;
-        if (colorType == 0) { // 흰색/노랑 (가장 뜨거운 부분)
+        if (colorType == 0) { 
             particles[i].color[0] = 1.0f; particles[i].color[1] = 1.0f; particles[i].color[2] = 0.8f;
         }
-        else if (colorType == 1) { // 주황
+        else if (colorType == 1) { 
             particles[i].color[0] = 1.0f; particles[i].color[1] = 0.5f; particles[i].color[2] = 0.0f;
         }
-        else { // 빨강
+        else {
             particles[i].color[0] = 1.0f; particles[i].color[1] = 0.0f; particles[i].color[2] = 0.0f;
         }
 
@@ -810,7 +774,6 @@ void newExplosion(vec3 pos, int startIdx, int pCount, int dStartIdx, int dCount)
 
         debris[i].orientation[0] = 0.0; debris[i].orientation[1] = 0.0; debris[i].orientation[2] = 0.0;
 
-        // [수정] 파편 색상을 어두운 회색/검정으로 (타버린 잔해 느낌)
         debris[i].color[0] = 0.3f; debris[i].color[1] = 0.3f; debris[i].color[2] = 0.3f;
 
         debris[i].scale[0] = (2.0 * ((GLfloat)rand()) / ((GLfloat)RAND_MAX)) - 1.0;
@@ -820,7 +783,7 @@ void newExplosion(vec3 pos, int startIdx, int pCount, int dStartIdx, int dCount)
         newSpeed(debris[i].speed);
         newSpeed(debris[i].orientationSpeed);
     }
-    fuel = 500; // 폭발 지속 시간 리셋
+    fuel = 500;
 }
 
 void UpdateParticles() {
@@ -841,7 +804,7 @@ void UpdateParticles() {
             debris[i].orientation[1] += debris[i].orientationSpeed[1] * 10.0f;
             debris[i].orientation[2] += debris[i].orientationSpeed[2] * 10.0f;
         }
-        fuel--; // [중요] fuel이 0이 되면 멈추지만, 연쇄 폭발 시 fuel을 다시 500으로 설정하므로 문제 없음
+        fuel--; 
     }
 }
 
@@ -853,7 +816,6 @@ void InitObjects() {
     mySphere->isStatic = false;
     floorObj = new Cube(vec3(0, -0.5, 0), vec3(40, 1, 40), vec3(0.8f, 0.8f, 0.8f));
 
-    // [Room 1] 벽 생성
     leftWall = new WallWithHole(vec3(-20, 7.5, 0), vec3(40, 15, 2), vec3(4, 4, 4), vec3(0.7f, 0.7f, 0.7f), 90.0f);
     rightWall = new WallWithHole(vec3(20, 7.5, 0), vec3(40, 15, 2), vec3(4, 4, 4), vec3(0.7f, 0.7f, 0.7f), -90.0f);
 
@@ -869,34 +831,27 @@ void InitObjects() {
     btnLeft = new Button(vec3(-20.0f, 5.5f, 0.0f), mySphere);
     btnRight = new Button(vec3(20.0f, 5.5f, 0.0f), myCube);
 
-    // [Room 2] 객체 초기화
     room2Floor = new Cube(vec3(0, -0.5, -40), vec3(40, 1, 40), vec3(0.8f, 0.8f, 0.8f));
     room2Back = new Cube(vec3(0, 7.5, -60), vec3(40, 15, 2), vec3(0.7f, 0.7f, 0.7f));
 
-    // 왼쪽 벽은 기존처럼 일반 Cube로 유지 (원하시면 WallWithHole로 변경 가능)
     room2Left = new Cube(vec3(-20, 7.5, -40), vec3(2, 15, 40), vec3(0.7f, 0.7f, 0.7f));
 
-    // [수정] Room 2 오른쪽 벽을 Room 1 오른쪽 벽(rightWall)과 동일한 스펙으로 생성
-    // 위치(Z)는 -40, 회전각 -90도, 크기 및 구멍 크기는 위쪽 rightWall과 동일
     room2RightHole = new WallWithHole(vec3(20, 7.5, -40), vec3(40, 15, 2), vec3(4, 4, 4), vec3(0.7f, 0.7f, 0.7f), -90.0f);
 
     room2Top = new Cube(vec3(0.0f, 15.5f, -40.0f), vec3(40.0f, 1.0f, 40.0f), vec3(0.6f, 0.6f, 0.6f));
 
 
-    // 아나모픽 퍼즐용 박스
     rotatedBox = new Cube(vec3(1.8f, 5.2f, -42.0f), vec3(4.6f, 4.6f, 4.6f), vec3(1.0f, 1.0f, 1.0f));
     rotatedBox->rotation = vec3(95.0f, 67.0f, 18.0f);
     rotatedBox->isStatic = true;
     rotatedBox->SetTextures("Data/redcube.bmp", "Data/bluecube.bmp", "Data/yellowcube.bmp");
 
-    // Room 2 버튼
     btnRoom2 = new Button(vec3(20.0f, 5.5f, -40.0f), rotatedBox);
 
     myPuzzle.Init(textureFilePath);
     srand(time(NULL));
 }
 
-// [그림자] 투영 행렬 생성 함수
 void SetShadowMatrix(float* matrix, float* lightPos, float* plane) {
     float dot = plane[0] * lightPos[0] + plane[1] * lightPos[1] + plane[2] * lightPos[2] + plane[3] * lightPos[3];
 
@@ -926,48 +881,39 @@ void UpdateGame() {
     btnRight->Update();
     isLevelClear = (btnLeft->isPressed && btnRight->isPressed);
 
-    // [수정] 버튼 클릭 시 카메라 이동 시퀀스 시작
     if (currentState == STATE_NORMAL) {
         btnRoom2->Update();
         if (btnRoom2->isPressed) {
-            // 버튼이 눌리면 즉시 이동 상태로 변경
             currentState = STATE_TRANSITION;
             transitionTime = 0.0f;
 
-            // 현재 카메라 위치 저장
             startCamPos = mainCamera.Pos;
             startCamTarget = mainCamera.Pos + mainCamera.Front;
             startCamUp = mainCamera.Up;
 
-            // 잡고 있는 물체 놓기
             heldObject = nullptr;
 
         }
     }
     else if (currentState == STATE_TRANSITION) {
-        // 카메라 이동 애니메이션 진행 (천천히)
         transitionTime += 0.005f;
 
         if (transitionTime >= 1.0f) {
             transitionTime = 1.0f;
             currentState = STATE_EXPLODED;
 
-            // [1차 폭발] Room 2 (파티클 앞쪽 절반 사용)
             isRoom2Exploded = true;
             newExplosion(vec3(0, 5.5, -40), 0, NUM_PARTICLES / 2, 0, NUM_DEBRIS / 2);
 
-            explosionSequenceTimer = 0; // 연쇄 폭발 타이머 초기화
+            explosionSequenceTimer = 0; 
 
         }
     }
     else if (currentState == STATE_EXPLODED) {
-        // [2차 폭발 로직]
         explosionSequenceTimer++;
 
-        // 약 2초(120프레임) 뒤에 Room 1 폭발
         if (!isRoom1Exploded && explosionSequenceTimer > 120) {
             isRoom1Exploded = true;
-            // [2차 폭발] Room 1 (파티클 뒤쪽 절반 사용)
             newExplosion(vec3(0, 5.5, 0), NUM_PARTICLES / 2, NUM_PARTICLES / 2, NUM_DEBRIS / 2, NUM_DEBRIS / 2);
 
         }
@@ -979,10 +925,8 @@ void DrawSkybox(vec3 pos) {
 
     glPushMatrix();
 
-    // 전달받은 위치로 스카이박스 이동 (항상 카메라 중심)
     glTranslatef(pos.x, pos.y, pos.z);
 
-    // 2. 렌더링 설정 끄기 (조명 X, 깊이 쓰기 X)
     glDisable(GL_LIGHTING);
     glDepthMask(GL_FALSE);
 
@@ -990,55 +934,46 @@ void DrawSkybox(vec3 pos) {
     glBindTexture(GL_TEXTURE_2D, skyTextureID);
     glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
 
-    float s = 40.0f; // [중요] 크기를 zFar(100.0)보다 작게 설정 (잘림 방지)
+    float s = 40.0f; 
 
-    // 3. 정육면체 그리기 (안쪽을 바라보도록 텍스처 매핑)
     glBegin(GL_QUADS);
-    // Front face
     glTexCoord2f(0.0f, 0.0f); glVertex3f(-s, -s, s);
     glTexCoord2f(1.0f, 0.0f); glVertex3f(s, -s, s);
     glTexCoord2f(1.0f, 1.0f); glVertex3f(s, s, s);
     glTexCoord2f(0.0f, 1.0f); glVertex3f(-s, s, s);
-    // Back face
     glTexCoord2f(1.0f, 0.0f); glVertex3f(-s, -s, -s);
     glTexCoord2f(1.0f, 1.0f); glVertex3f(-s, s, -s);
     glTexCoord2f(0.0f, 1.0f); glVertex3f(s, s, -s);
     glTexCoord2f(0.0f, 0.0f); glVertex3f(s, -s, -s);
-    // Top face
     glTexCoord2f(0.0f, 1.0f); glVertex3f(-s, s, -s);
     glTexCoord2f(0.0f, 0.0f); glVertex3f(-s, s, s);
     glTexCoord2f(1.0f, 0.0f); glVertex3f(s, s, s);
     glTexCoord2f(1.0f, 1.0f); glVertex3f(s, s, -s);
-    // Bottom face
     glTexCoord2f(1.0f, 1.0f); glVertex3f(-s, -s, -s);
     glTexCoord2f(0.0f, 1.0f); glVertex3f(s, -s, -s);
     glTexCoord2f(0.0f, 0.0f); glVertex3f(s, -s, s);
     glTexCoord2f(1.0f, 0.0f); glVertex3f(-s, -s, s);
-    // Right face
     glTexCoord2f(1.0f, 0.0f); glVertex3f(s, -s, -s);
     glTexCoord2f(1.0f, 1.0f); glVertex3f(s, s, -s);
     glTexCoord2f(0.0f, 1.0f); glVertex3f(s, s, s);
     glTexCoord2f(0.0f, 0.0f); glVertex3f(s, -s, s);
-    // Left face
     glTexCoord2f(0.0f, 0.0f); glVertex3f(-s, -s, -s);
     glTexCoord2f(1.0f, 0.0f); glVertex3f(-s, -s, s);
     glTexCoord2f(1.0f, 1.0f); glVertex3f(-s, s, s);
     glTexCoord2f(0.0f, 1.0f); glVertex3f(-s, s, -s);
     glEnd();
 
-    // 4. 설정 복구
     glDisable(GL_TEXTURE_2D);
-    glDepthMask(GL_TRUE); // 깊이 쓰기 다시 켜기
+    glDepthMask(GL_TRUE);
     glEnable(GL_LIGHTING);
 
     glPopMatrix();
 }
 
-// [추가] 텍스트 렌더링 헬퍼 함수
 void RenderText(float x, float y, const char* text, void* font = GLUT_BITMAP_TIMES_ROMAN_24) {
-    glRasterPos2f(x, y); // 텍스트가 그려질 2D 좌표 설정
+    glRasterPos2f(x, y); 
     for (const char* c = text; *c != '\0'; c++) {
-        glutBitmapCharacter(font, *c); // 문자 하나씩 그리기
+        glutBitmapCharacter(font, *c); 
     }
 }
 
@@ -1046,17 +981,15 @@ void DrawScene() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
 
-    vec3 renderPos; // [추가] 현재 프레임에서 카메라가 있는 위치
-
-    // [수정] 상태별 카메라 뷰 처리 및 renderPos 갱신
+    vec3 renderPos; 
     if (currentState == STATE_NORMAL) {
-        renderPos = mainCamera.Pos; // 일반 상태 위치
+        renderPos = mainCamera.Pos; 
         vec3 target = renderPos + mainCamera.Front;
         gluLookAt(renderPos.x, renderPos.y, renderPos.z,
             target.x, target.y, target.z, mainCamera.Up.x, mainCamera.Up.y, mainCamera.Up.z);
     }
     else if (currentState == STATE_TRANSITION) {
-        // 카메라 이동 중 (선형 보간)
+        
         float t = transitionTime;
         t = t * t * (3 - 2 * t);
 
@@ -1064,24 +997,17 @@ void DrawScene() {
         vec3 curTarget = startCamTarget * (1.0f - t) + endCamTarget * t;
         vec3 curUp = startCamUp * (1.0f - t) + endCamUp * t;
 
-        renderPos = curPos; // [중요] 이동 중인 위치 저장
+        renderPos = curPos; 
 
-        gluLookAt(curPos.x, curPos.y, curPos.z,
-            curTarget.x, curTarget.y, curTarget.z,
-            curUp.x, curUp.y, curUp.z);
+        gluLookAt(curPos.x, curPos.y, curPos.z, curTarget.x, curTarget.y, curTarget.z, curUp.x, curUp.y, curUp.z);
     }
     else if (currentState == STATE_EXPLODED) {
-        renderPos = endCamPos; // 폭발 후 위치
-        gluLookAt(endCamPos.x, endCamPos.y, endCamPos.z,
-            endCamTarget.x, endCamTarget.y, endCamTarget.z,
-            endCamUp.x, endCamUp.y, endCamUp.z);
+        renderPos = endCamPos; 
+        gluLookAt(endCamPos.x, endCamPos.y, endCamPos.z, endCamTarget.x, endCamTarget.y, endCamTarget.z, endCamUp.x, endCamUp.y, endCamUp.z);
     }
 
-    // [수정] 결정된 카메라 위치를 전달하여 그림
     DrawSkybox(renderPos);
 
-    // [드로잉] Room 1 객체들
-    // [수정] Room 1이 폭발하지 않았을 때만 그림
     if (!isRoom1Exploded) {
         floorObj->Draw();
         backWall->Draw();
@@ -1096,33 +1022,25 @@ void DrawScene() {
         rightWall->Draw(); btnRight->Draw();
     }
 
-    // [Room 2 및 폭발 효과]
-    // 폭발 상태가 아니면(일반, 이동중) 방을 그림
     if (!isRoom2Exploded) {
         room2Floor->Draw();
         room2Back->Draw();
         room2Left->Draw();
-        room2RightHole->Draw(); // 구멍 벽
+        room2RightHole->Draw();
         room2Top->Draw();
         if (!isPuzzleClear) {
-            // [클리어 전] 퍼즐 조각들만 보임 (박스 안 보임)
             myPuzzle.Draw();
         }
         else {
-            // [클리어 후] 진짜 큐브(박스)만 보임 (퍼즐 안 보임)
             if (rotatedBox) rotatedBox->Draw();
         }
     }
 
-    // 2. 버튼과 기폭제 큐브 그리기
-    // 폭발 전까지만 그리기
-    if (currentState != STATE_EXPLODED) {
+   if (currentState != STATE_EXPLODED) {
         btnRoom2->Draw();
     }
 
-    // 3. 폭발 효과 (파티클 & 파편) 그리기
     if (fuel > 0 && currentState == STATE_EXPLODED) {
-        // --- 파티클 그리기 ---
         glPushMatrix();
         glDisable(GL_LIGHTING); glDisable(GL_DEPTH_TEST);
         glPointSize(3.0f);
@@ -1133,7 +1051,6 @@ void DrawScene() {
         }
         glEnd();
 
-        // --- 파편 그리기 ---
         glEnable(GL_LIGHTING); glEnable(GL_DEPTH_TEST);
         for (int i = 0; i < NUM_DEBRIS; i++) {
             glColor3fv(debris[i].color);
@@ -1155,12 +1072,10 @@ void DrawScene() {
     if (heldObject && currentState == STATE_NORMAL) {
         float minDist = 10000.0f;
 
-        // [충돌 대상 목록]
         vector<GameObject*> obstacles;
         if (heldObject != myCube) obstacles.push_back(myCube);
         if (heldObject != mySphere) obstacles.push_back(mySphere);
 
-        // 바닥, 뒷벽, 천장, 앞벽 등등 모두 추가
         obstacles.push_back(floorObj);
         obstacles.push_back(backWall);
         obstacles.push_back(ceilingObj);
@@ -1174,11 +1089,9 @@ void DrawScene() {
                 obstacles.push_back(rotatedBox);
             }
         }
-        // [Room 2 추가] 벽 충돌 포함
         obstacles.push_back(room2Floor); obstacles.push_back(room2Back);
         obstacles.push_back(room2Left);
 
-        // room2RightHole 내부 큐브들 추가
         if (room2RightHole) {
             for (auto* p : room2RightHole->collisionCubes) {
                 obstacles.push_back(p);
@@ -1189,7 +1102,6 @@ void DrawScene() {
         if (rightWall) for (auto* p : rightWall->collisionCubes) obstacles.push_back(p);
 
 
-        // 레이캐스트 및 충돌 처리
         for (auto* obs : obstacles) {
             AABB wallBox = GetAABB(obs);
             vec3 hitNormal;
@@ -1216,7 +1128,6 @@ void DrawScene() {
             }
         }
 
-        // 바닥/천장 무한 평면 처리 (혹시 박스 사이로 샜을 경우 대비)
         if (mainCamera.Front.y < 0) {
             float t = (0.5f - mainCamera.Pos.y) / mainCamera.Front.y;
             if (t > 0) {
@@ -1251,47 +1162,35 @@ void DrawScene() {
         heldObject->velocity = vec3(0);
     }
 
-    // [그림자 준비]
-    float lightPos[] = { 0.0f, 30.0f, 0.0f, 1.0f }; // 조명 위치
-    float floorPlane[] = { 0.0f, 1.0f, 0.0f, 0.0f }; // 바닥 평면 (y=0)
+    float lightPos[] = { 0.0f, 30.0f, 0.0f, 1.0f }; 
+    float floorPlane[] = { 0.0f, 1.0f, 0.0f, 0.0f }; 
     float shadowMat[16];
     SetShadowMatrix(shadowMat, lightPos, floorPlane);
-
-    // [그림자 그리기]
-    // 바닥과 겹침 방지(Z-Fighting)를 위해 아주 살짝 띄움 (Y축 +0.01)
+    
     glPushMatrix();
     glTranslatef(0.0f, 0.01f, 0.0f);
 
     if (myCube) myCube->DrawShadow(shadowMat);
     if (mySphere) mySphere->DrawShadow(shadowMat);
-    // [추가] 새 큐브 그림자 (폭발 전까지만)
     if (isPuzzleClear && rotatedBox && !isRoom2Exploded) rotatedBox->DrawShadow(shadowMat);
-    // glDisable(GL_BLEND);
     glPopMatrix();
 
-    // [수정] Room 1이 폭발하지 않았을 때만 큐브/구체 그림
     if (!isRoom1Exploded) {
         myCube->Draw();
         mySphere->Draw();
     }
-
-    // -------------------------------------------------------
-    // [UI 드로잉 (2D 오버레이)] - 게임 클리어 추가됨
-    // -------------------------------------------------------
+    
     glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); glOrtho(0, windowWidth, 0, windowHeight, -1, 1);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity(); glDisable(GL_LIGHTING); glDisable(GL_DEPTH_TEST);
 
-    // 1. 크로스헤어 그리기 (폭발 전까지만)
     if (currentState != STATE_EXPLODED) {
         glColor3f(1, 1, 1); glBegin(GL_LINES);
         glVertex2f(windowWidth / 2 - 10, windowHeight / 2); glVertex2f(windowWidth / 2 + 10, windowHeight / 2);
         glVertex2f(windowWidth / 2, windowHeight / 2 - 10); glVertex2f(windowWidth / 2, windowHeight / 2 + 10); glEnd();
     }
 
-    // 2. 게임 클리어 텍스트 출력 (마지막 방 폭발 시)
     if (isRoom1Exploded) {
-        glColor3f(1.0f, 1.0f, 1.0f); // 노란색
-        // 텍스트 중앙 정렬 대략적으로 계산
+        glColor3f(1.0f, 1.0f, 1.0f);
         RenderText(windowWidth / 2 - 60, windowHeight / 2, "GAME CLEAR");
 
     }
@@ -1304,7 +1203,6 @@ void DrawScene() {
 
 void MyTimer(int val) {
     UpdateGame();
-    // [추가] 파티클 물리 업데이트
     UpdateParticles();
 
     if (heldObject != myCube) {
@@ -1333,12 +1231,11 @@ void MyTimer(int val) {
 
     if (isPuzzleClear && rotatedBox) {
         if (heldObject != rotatedBox) {
-            // 바닥 높이 계산하여 물리 적용
             rotatedBox->UpdatePhysics(0.02f, GetFloorHeightAt(rotatedBox->position, rotatedBox->scale));
             rotatedBox->UpdateTrails(false);
         }
         else {
-            rotatedBox->UpdateTrails(true); // 잡고 있을 때 잔상
+            rotatedBox->UpdateTrails(true);
         }
     }
 
@@ -1347,38 +1244,31 @@ void MyTimer(int val) {
 }
 
 void MyMouse(int button, int state, int x, int y) {
-    if (currentState != STATE_NORMAL) return; // [수정] 이동 중이나 폭발 후 클릭 방지
+    if (currentState != STATE_NORMAL) return;
 
     if (!isPuzzleClear && isLevelClear && myPuzzle.CheckSolved(mainCamera.Pos)) {
         cout << "Puzzle Clear! (By Click)" << endl;
         isPuzzleClear = true;
         if (rotatedBox) rotatedBox->isStatic = false;
-        // [연출] 정답 위치로 카메라 강제 고정 & 시선 정렬
-        // (클릭하는 순간 그림이 딱 맞춰지면서 리얼 큐브로 변하는 연출)
         mainCamera.Pos = myPuzzle.projectorPos;
 
         vec3 dir = normalize(myPuzzle.lookAtTarget - mainCamera.Pos);
         mainCamera.Pitch = degrees(asin(dir.y));
-        mainCamera.Yaw = degrees(atan2(dir.z, dir.x)); // atan2(z, x)는 수학적 각도, OpenGL 좌표계에 맞게 조정 필요할 수 있음
+        mainCamera.Yaw = degrees(atan2(dir.z, dir.x));
 
-        // atan2의 결과는 -180~180인데, 카메라 Yaw 기준(-90이 정면)에 맞추기 위해 보정
-        // 보통 -90도를 빼거나 더해서 맞춥니다. 여기서는 LookAt 함수가 알아서 계산하므로
-        // 간단하게 벡터만 업데이트해줘도 되지만, 확실하게 하기 위해 UpdateVectors 호출
+        
         mainCamera.UpdateVectors();
 
-        return; // 퍼즐을 풀었으면 물체 집기 등 다른 동작은 하지 않음
+        return;
     }
 
     if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-        // [1. 퍼즐 클리어 로직]
         if (!isPuzzleClear && isLevelClear && myPuzzle.CheckSolved(mainCamera.Pos)) {
             cout << "Puzzle Clear! (By Click)" << endl;
             isPuzzleClear = true;
 
-            // [핵심] 리얼 큐브를 물리 객체로 변환 (이제 중력 적용됨)
             if (rotatedBox) rotatedBox->isStatic = false;
 
-            // 카메라 연출 (기존 유지)
             mainCamera.Pos = myPuzzle.projectorPos;
             vec3 dir = normalize(myPuzzle.lookAtTarget - mainCamera.Pos);
             mainCamera.Pitch = degrees(asin(dir.y));
@@ -1398,7 +1288,6 @@ void MyMouse(int button, int state, int x, int y) {
             float minD = 1000.0f;
             GameObject* picked = nullptr;
             for (auto obj : pickCandidates) {
-                // 방어 코드 (혹시 null이면 패스)
                 if (!obj) continue;
 
                 vec3 toObj = obj->position - mainCamera.Pos;
@@ -1419,7 +1308,7 @@ void MyMouse(int button, int state, int x, int y) {
 }
 
 void MyPassiveMotion(int x, int y) {
-    if (currentState != STATE_NORMAL) return; // [수정] 폭발 후 시점 이동 방지
+    if (currentState != STATE_NORMAL) return; 
 
     int cx = windowWidth / 2; int cy = windowHeight / 2;
     if (x == cx && y == cy) return;
@@ -1429,7 +1318,7 @@ void MyPassiveMotion(int x, int y) {
 }
 
 void MyKeyboard(unsigned char key, int x, int y) {
-    if (currentState != STATE_NORMAL && key != 27) return; // [수정] 폭발 후 키보드 방지 (ESC 제외)
+    if (currentState != STATE_NORMAL && key != 27) return; 
 
     switch (key) {
     case 'w': mainCamera.ProcessKey(0, isLevelClear); break;
