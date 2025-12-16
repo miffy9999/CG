@@ -14,11 +14,8 @@
 #include <math.h>
 #include <time.h>
 
-// -------------------------------------------------------
-// [전역 설정]
-// -------------------------------------------------------
-#define NUM_PARTICLES    4000    // 파티클 총 개수
-#define NUM_DEBRIS       1000    // 파편 총 개수
+#define NUM_PARTICLES    4000   
+#define NUM_DEBRIS       1000    
 
 struct particleData {
     float position[3];
@@ -38,28 +35,25 @@ struct debrisData {
 using namespace std;
 using namespace glm;
 
-// [Room 2 추가] 텍스처 경로 및 퍼즐 변수
 const char* textureFilePath = "../Data/Cube.bmp";
 bool isPuzzleClear = false;
 
-// [윈도우 설정]
 int windowWidth = 1000;
 int windowHeight = 800;
 
 bool isLevelClear = false;
 particleData particles[NUM_PARTICLES];
 debrisData debris[NUM_DEBRIS];
-int fuel = 0;                // 폭발 지속 시간
+int fuel = 0;  
 
-bool isRoom2Exploded = false; // Room 2 폭발 상태
-bool isRoom1Exploded = false; // [추가] Room 1 폭발 상태
-int explosionSequenceTimer = 0; // [추가] 연쇄 폭발 타이머
+bool isRoom2Exploded = false; 
+bool isRoom1Exploded = false;
+int explosionSequenceTimer = 0; 
 
-// [수정] 카메라 애니메이션 및 상태 관리를 위한 변수 추가
 enum GameState {
-    STATE_NORMAL,       // 평상시
-    STATE_TRANSITION,   // 카메라 이동 중
-    STATE_EXPLODED      // 폭발 시퀀스 진행 중 (탑다운 뷰)
+    STATE_NORMAL,      
+    STATE_TRANSITION,  
+    STATE_EXPLODED     
 };
 
 GameState currentState = STATE_NORMAL;
@@ -272,21 +266,17 @@ public:
 
             glDisable(GL_TEXTURE_2D);
 
-            // [복구] 다른 물체들을 위해 조명과 텍스처 모드 원상복구
             glEnable(GL_LIGHTING);
             glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
         }
         else {
-            // 텍스처 없는 일반 큐브 (기존 방식 - 조명 받음)
             glColor3f(color.r, color.g, color.b);
             glutSolidCube(1.0f);
         }
 
         glPopMatrix();
 
-        // (잔상 효과 코드는 그대로 유지...)
         if (!trails.empty()) {
-            // ... (기존 코드 생략) ...
             glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
             float alpha = 0.5f;
             for (auto& t : trails) {
@@ -303,7 +293,6 @@ public:
         }
     }
 
-    // 그림자 그리기 (3축 회전 적용)
     void DrawShadow(float* shadowMat) override {
         if (!shadowMat) return;
         glPushMatrix();
@@ -466,9 +455,6 @@ public:
     }
 };
 
-// -------------------------------------------------------
-// [Room 2 추가] 아나모픽 퍼즐 클래스 
-// -------------------------------------------------------
 class AnamorphicPuzzle {
 public:
     struct Piece {
@@ -483,7 +469,6 @@ public:
     GLuint texID;
 
     AnamorphicPuzzle() {
-        // [위치 조정] Room 1의 뒤쪽 공간(Z < -20)에 배치
         projectorPos = vec3(12.0f, 6.0f, -32.0f);
         lookAtTarget = vec3(-6.0f, 4.0f, -50.0f);
         texID = 0;
@@ -493,7 +478,7 @@ public:
         Piece p;
         p.pos = position;
         p.scale = vec3(size, size, size);
-        p.rot = vec3(rand() % 360, rand() % 360, rand() % 360); // 회전은 랜덤이 자연스러움
+        p.rot = vec3(rand() % 360, rand() % 360, rand() % 360);
         pieces.push_back(p);
     }
 
@@ -553,7 +538,6 @@ public:
         vec4 clipSpace = proj * view * vec4(worldPos, 1.0f);
         vec3 ndc = vec3(clipSpace) / clipSpace.w;
 
-        // 좌우 반전 유지
         float u = 1.0f - (ndc.x * 0.5f + 0.5f);
         float v = ndc.y * 0.5f + 0.5f;
 
